@@ -10,13 +10,15 @@ import (
 	"pricerunner-parser/internal/storage"
 	"sync"
 	"time"
+
+	"github.com/playwright-community/playwright-go"
 )
 
 type ParserController struct {
-	mu      sync.Mutex
-	parser  *parser.Parser
-	status  string
-	cfg     *config.Config
+	mu     sync.Mutex
+	parser *parser.Parser
+	status string
+	cfg    *config.Config
 }
 
 func NewParserController(cfg *config.Config) *ParserController {
@@ -108,7 +110,24 @@ func (c *ParserController) startScheduler() {
 	}()
 }
 
+func initPlaywright() error {
+	err := playwright.Install(&playwright.RunOptions{
+		Browsers: []string{"chromium"},
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
+	// Инициализируем Playwright в самом начале
+	log.Println("Initializing Playwright...")
+	if err := initPlaywright(); err != nil {
+		log.Printf("Warning: Playwright initialization failed: %v", err)
+		// Продолжаем работу, возможно браузеры уже установлены
+	}
+
 	configPath := flag.String("config", "config.yaml", "Path to configuration file")
 	flag.Parse()
 

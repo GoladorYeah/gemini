@@ -1,251 +1,453 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { 
+  Settings, 
+  Key, 
+  FileText, 
+  Package, 
+  BarChart3, 
+  Play, 
+  Square, 
+  RefreshCw,
+  Eye,
+  EyeOff,
+  Save,
+  Trash2,
+  Edit,
+  Plus,
+  Download,
+  Upload
+} from 'lucide-react';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
-const AdminPage = () => {
+interface Product {
+  id: string;
+  title: string;
+  category: string;
+  features: string[];
+  image_url?: string;
+  google_product_id?: string;
+}
+
+interface Statistics {
+  total_requests: number;
+  unique_queries: number;
+  most_popular_query: string;
+}
+
+export default function AdminPage() {
+  const [activeTab, setActiveTab] = useState('parser');
   const [parserStatus, setParserStatus] = useState('idle');
   const [url, setUrl] = useState('');
   const [category, setCategory] = useState('');
   const [geminiApiKeys, setGeminiApiKeys] = useState('');
   const [serpApiKeys, setSerpApiKeys] = useState('');
+  const [showKeys, setShowKeys] = useState(false);
   const [logs, setLogs] = useState('');
   const [selectedService, setSelectedService] = useState('backend');
-  const [products, setProducts] = useState<any[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [statistics, setStatistics] = useState<any>(null);
+  const [statistics, setStatistics] = useState<Statistics | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const tabs = [
+    { id: 'parser', label: 'Parser Management', icon: Settings },
+    { id: 'keys', label: 'API Keys', icon: Key },
+    { id: 'logs', label: 'System Logs', icon: FileText },
+    { id: 'products', label: 'Products', icon: Package },
+    { id: 'stats', label: 'Statistics', icon: BarChart3 }
+  ];
+
+  useEffect(() => {
+    if (activeTab === 'parser') getParserStatus();
+    if (activeTab === 'keys') getApiKeys();
+    if (activeTab === 'logs') getLogs();
+    if (activeTab === 'products') getProducts();
+    if (activeTab === 'stats') getStatistics();
+  }, [activeTab, selectedService]);
 
   const getParserStatus = async () => {
-    const response = await fetch('http://localhost:8081/api/admin/parser/status');
-    const data = await response.json();
-    setParserStatus(data.status);
+    try {
+      const response = await fetch('http://localhost:8081/api/admin/parser/status');
+      const data = await response.json();
+      setParserStatus(data.status);
+    } catch (error) {
+      console.error('Failed to get parser status:', error);
+    }
   };
 
   const startParser = async () => {
-    await fetch('http://localhost:8081/api/admin/parser/start', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ url, category }),
-    });
-    getParserStatus();
+    try {
+      setLoading(true);
+      await fetch('http://localhost:8081/api/admin/parser/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, category }),
+      });
+      getParserStatus();
+    } catch (error) {
+      console.error('Failed to start parser:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const stopParser = async () => {
-    await fetch('http://localhost:8081/api/admin/parser/stop', {
-      method: 'POST',
-    });
-    getParserStatus();
+    try {
+      setLoading(true);
+      await fetch('http://localhost:8081/api/admin/parser/stop', { method: 'POST' });
+      getParserStatus();
+    } catch (error) {
+      console.error('Failed to stop parser:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getApiKeys = async () => {
-    const response = await fetch('http://localhost:8081/api/admin/keys');
-    const data = await response.json();
-    setGeminiApiKeys(data.gemini_api_keys);
-    setSerpApiKeys(data.serpapi_api_keys);
+    try {
+      const response = await fetch('http://localhost:8081/api/admin/keys');
+      const data = await response.json();
+      setGeminiApiKeys(data.gemini_api_keys || '');
+      setSerpApiKeys(data.serpapi_api_keys || '');
+    } catch (error) {
+      console.error('Failed to get API keys:', error);
+    }
   };
 
   const updateApiKeys = async () => {
-    await fetch('http://localhost:8081/api/admin/keys', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ gemini_api_keys: geminiApiKeys, serpapi_api_keys: serpApiKeys }),
-    });
-    getApiKeys();
+    try {
+      setLoading(true);
+      await fetch('http://localhost:8081/api/admin/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          gemini_api_keys: geminiApiKeys, 
+          serpapi_api_keys: serpApiKeys 
+        }),
+      });
+      getApiKeys();
+    } catch (error) {
+      console.error('Failed to update API keys:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getLogs = async () => {
-    const response = await fetch(`http://localhost:8081/api/admin/logs/${selectedService}`);
-    const data = await response.text();
-    setLogs(data);
+    try {
+      const response = await fetch(`http://localhost:8081/api/admin/logs/${selectedService}`);
+      const data = await response.text();
+      setLogs(data);
+    } catch (error) {
+      console.error('Failed to get logs:', error);
+      setLogs('Failed to load logs');
+    }
   };
 
   const getProducts = async () => {
-    const response = await fetch('http://localhost:8081/api/admin/products/');
-    const data = await response.json();
-    setProducts(data);
-  };
-
-  const addProduct = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const newProduct = {
-      id: formData.get('id') as string,
-      title: formData.get('title') as string,
-      category: formData.get('category') as string,
-      features: (formData.get('features') as string).split(','),
-      image_url: formData.get('image_url') as string,
-    };
-    await fetch('http://localhost:8081/api/admin/products/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(newProduct),
-    });
-    getProducts();
-  };
-
-  const updateProduct = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const updatedProduct = {
-      id: selectedProduct.id,
-      title: formData.get('title') as string,
-      category: formData.get('category') as string,
-      features: (formData.get('features') as string).split(','),
-      image_url: formData.get('image_url') as string,
-    };
-    await fetch(`http://localhost:8081/api/admin/products/${selectedProduct.id}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatedProduct),
-      }
-    );
-    getProducts();
-    setIsEditing(false);
-    setSelectedProduct(null);
-  };
-
-  const deleteProduct = async (productId: string) => {
-    await fetch(`http://localhost:8081/api/admin/products/${productId}`, {
-      method: 'DELETE',
-    });
-    getProducts();
+    try {
+      const response = await fetch('http://localhost:8081/api/admin/products/');
+      const data = await response.json();
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Failed to get products:', error);
+      setProducts([]);
+    }
   };
 
   const getStatistics = async () => {
-    const response = await fetch('http://localhost:8081/api/admin/statistics');
-    const data = await response.json();
-    setStatistics(data);
+    try {
+      const response = await fetch('http://localhost:8081/api/admin/statistics');
+      const data = await response.json();
+      setStatistics(data);
+    } catch (error) {
+      console.error('Failed to get statistics:', error);
+    }
   };
 
-  useEffect(() => {
-    getParserStatus();
-    getApiKeys();
-    getLogs();
-    getProducts();
-    getStatistics();
-  }, [selectedService]);
+  const deleteProduct = async (productId: string) => {
+    try {
+      await fetch(`http://localhost:8081/api/admin/products/${productId}`, {
+        method: 'DELETE',
+      });
+      getProducts();
+    } catch (error) {
+      console.error('Failed to delete product:', error);
+    }
+  };
 
-  return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-800">
-      <header className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-white">Admin Panel</h1>
-      </header>
-      <main className="flex-1 p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Parser Management */}
-            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Parser Management</h2>
-              <div className="mt-4">
-                <p className="text-gray-700 dark:text-gray-300">Status: <span className="font-bold">{parserStatus}</span></p>
-                <div className="mt-4">
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'parser':
+        return (
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Parser Control
+                </h3>
+                <div className="flex items-center space-x-2">
+                  <div className={`w-3 h-3 rounded-full ${
+                    parserStatus === 'running' ? 'bg-green-500' : 
+                    parserStatus === 'stopping' ? 'bg-yellow-500' : 'bg-gray-400'
+                  }`} />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                    Status: {parserStatus}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    URL to Parse
+                  </label>
                   <input
-                    type="text"
+                    type="url"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    placeholder="URL to parse"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="https://www.pricerunner.com/..."
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
-                <div className="mt-2">
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Product Category
+                  </label>
                   <input
                     type="text"
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    placeholder="Product category"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Electronics, Clothing, etc."
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
-                <div className="mt-4 flex space-x-2">
-                  <button onClick={startParser} className="px-4 py-2 bg-blue-500 text-white rounded-lg">Start</button>
-                  <button onClick={stopParser} className="px-4 py-2 bg-red-500 text-white rounded-lg">Stop</button>
-                  <button onClick={getParserStatus} className="px-4 py-2 bg-gray-500 text-white rounded-lg">Refresh</button>
-                </div>
+              </div>
+
+              <div className="flex space-x-4 mt-6">
+                <motion.button
+                  onClick={startParser}
+                  disabled={loading || parserStatus === 'running'}
+                  className="flex items-center space-x-2 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Play className="w-4 h-4" />
+                  <span>Start Parser</span>
+                </motion.button>
+
+                <motion.button
+                  onClick={stopParser}
+                  disabled={loading || parserStatus === 'idle'}
+                  className="flex items-center space-x-2 px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Square className="w-4 h-4" />
+                  <span>Stop Parser</span>
+                </motion.button>
+
+                <motion.button
+                  onClick={getParserStatus}
+                  className="flex items-center space-x-2 px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Refresh</span>
+                </motion.button>
               </div>
             </div>
+          </div>
+        );
 
-            {/* API Key Management */}
-            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">API Key Management</h2>
-              <div className="mt-4">
-                <div className="mt-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Gemini API Keys (comma-separated)</label>
+      case 'keys':
+        return (
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  API Key Management
+                </h3>
+                <button
+                  onClick={() => setShowKeys(!showKeys)}
+                  className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                >
+                  {showKeys ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <span>{showKeys ? 'Hide' : 'Show'} Keys</span>
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Gemini API Keys (comma-separated)
+                  </label>
                   <input
-                    type="text"
+                    type={showKeys ? 'text' : 'password'}
                     value={geminiApiKeys}
                     onChange={(e) => setGeminiApiKeys(e.target.value)}
-                    placeholder="..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="key1,key2,key3..."
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
-                <div className="mt-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">SerpApi API Keys (comma-separated)</label>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    SerpApi API Keys (comma-separated)
+                  </label>
                   <input
-                    type="text"
+                    type={showKeys ? 'text' : 'password'}
                     value={serpApiKeys}
                     onChange={(e) => setSerpApiKeys(e.target.value)}
-                    placeholder="..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="key1,key2,key3..."
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
-                <div className="mt-4 flex space-x-2">
-                  <button onClick={updateApiKeys} className="px-4 py-2 bg-blue-500 text-white rounded-lg">Update Keys</button>
-                </div>
+
+                <motion.button
+                  onClick={updateApiKeys}
+                  disabled={loading}
+                  className="flex items-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {loading ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  <span>Update Keys</span>
+                </motion.button>
               </div>
             </div>
+          </div>
+        );
 
-            {/* Log Viewer */}
-            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg col-span-2">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Log Viewer</h2>
-              <div className="mt-4">
-                <div className="flex items-center space-x-2">
-                  <select value={selectedService} onChange={(e) => setSelectedService(e.target.value)} className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+      case 'logs':
+        return (
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  System Logs
+                </h3>
+                <div className="flex items-center space-x-4">
+                  <select
+                    value={selectedService}
+                    onChange={(e) => setSelectedService(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
                     <option value="backend">Backend</option>
                     <option value="parser">Parser</option>
+                    <option value="frontend">Frontend</option>
                   </select>
-                  <button onClick={getLogs} className="px-4 py-2 bg-gray-500 text-white rounded-lg">Refresh</button>
+                  <motion.button
+                    onClick={getLogs}
+                    className="flex items-center space-x-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Refresh</span>
+                  </motion.button>
                 </div>
-                <pre className="mt-4 bg-black text-white p-4 rounded-lg overflow-x-auto">{logs}</pre>
+              </div>
+
+              <div className="bg-black rounded-lg p-4 overflow-auto max-h-96">
+                <pre className="text-green-400 text-sm font-mono whitespace-pre-wrap">
+                  {logs || 'No logs available'}
+                </pre>
               </div>
             </div>
+          </div>
+        );
 
-            {/* Product Management */}
-            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg col-span-2">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Product Management</h2>
-              <div className="mt-4">
-                <form onSubmit={addProduct} className="space-y-2">
-                  <input name="id" placeholder="ID" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                  <input name="title" placeholder="Title" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                  <input name="category" placeholder="Category" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                  <input name="features" placeholder="Features (comma-separated)" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                  <input name="image_url" placeholder="Image URL" className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                  <button type="submit" className="px-4 py-2 bg-green-500 text-white rounded-lg">Add Product</button>
-                </form>
-                <table className="mt-4 w-full text-left table-auto">
+      case 'products':
+        return (
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Product Management
+                </h3>
+                <div className="flex space-x-4">
+                  <motion.button
+                    className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Product</span>
+                  </motion.button>
+                  <motion.button
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Import</span>
+                  </motion.button>
+                  <motion.button
+                    className="flex items-center space-x-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Export</span>
+                  </motion.button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
                   <thead>
-                    <tr>
-                      <th className="px-4 py-2">ID</th>
-                      <th className="px-4 py-2">Title</th>
-                      <th className="px-4 py-2">Actions</th>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="pb-3 text-sm font-medium text-gray-500 dark:text-gray-400">ID</th>
+                      <th className="pb-3 text-sm font-medium text-gray-500 dark:text-gray-400">Title</th>
+                      <th className="pb-3 text-sm font-medium text-gray-500 dark:text-gray-400">Category</th>
+                      <th className="pb-3 text-sm font-medium text-gray-500 dark:text-gray-400">Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {products.map((product) => (
                       <tr key={product.id}>
-                        <td className="border px-4 py-2">{product.id}</td>
-                        <td className="border px-4 py-2">{product.title}</td>
-                        <td className="border px-4 py-2">
-                          <button onClick={() => { setSelectedProduct(product); setIsEditing(true); }} className="px-2 py-1 bg-yellow-500 text-white rounded-lg mr-2">Edit</button>
-                          <button onClick={() => deleteProduct(product.id)} className="px-2 py-1 bg-red-500 text-white rounded-lg">Delete</button>
+                        <td className="py-4 text-sm text-gray-900 dark:text-white">
+                          {product.id}
+                        </td>
+                        <td className="py-4 text-sm text-gray-900 dark:text-white">
+                          {product.title}
+                        </td>
+                        <td className="py-4 text-sm text-gray-600 dark:text-gray-300">
+                          {product.category}
+                        </td>
+                        <td className="py-4">
+                          <div className="flex space-x-2">
+                            <motion.button
+                              onClick={() => {
+                                setSelectedProduct(product);
+                                setIsEditing(true);
+                              }}
+                              className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </motion.button>
+                            <motion.button
+                              onClick={() => deleteProduct(product.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </motion.button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -253,39 +455,113 @@ const AdminPage = () => {
                 </table>
               </div>
             </div>
+          </div>
+        );
 
-            {/* Usage Statistics */}
-            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg col-span-2">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Usage Statistics</h2>
-              {statistics && (
-                <div className="mt-4">
-                  <p>Total Requests: {statistics.total_requests}</p>
-                  <p>Unique Queries: {statistics.unique_queries}</p>
-                  <p>Most Popular Query: {statistics.most_popular_query}</p>
+      case 'stats':
+        return (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Requests</p>
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                      {statistics?.total_requests || 0}
+                    </p>
+                  </div>
+                  <BarChart3 className="w-8 h-8 text-blue-600" />
                 </div>
-              )}
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Unique Queries</p>
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                      {statistics?.unique_queries || 0}
+                    </p>
+                  </div>
+                  <Package className="w-8 h-8 text-green-600" />
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Popular Query</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                      {statistics?.most_popular_query || 'N/A'}
+                    </p>
+                  </div>
+                  <FileText className="w-8 h-8 text-purple-600" />
+                </div>
+              </div>
             </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      {/* Header */}
+      <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Admin Dashboard
+            </h1>
+            <a
+              href="/"
+              className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+            >
+              ← Back to Search
+            </a>
           </div>
         </div>
-        {isEditing && selectedProduct && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 w-full max-w-2xl">
-              <form onSubmit={updateProduct} className="space-y-2">
-                <input name="title" defaultValue={selectedProduct.title} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <input name="category" defaultValue={selectedProduct.category} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <input name="features" defaultValue={selectedProduct.features.join(',')} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <input name="image_url" defaultValue={selectedProduct.image_url} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                <div className="flex justify-end space-x-2">
-                  <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded-lg">Update</button>
-                  <button onClick={() => setIsEditing(false)} className="px-4 py-2 bg-gray-500 text-white rounded-lg">Cancel</button>
-                </div>
-              </form>
-            </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Sidebar */}
+          <div className="lg:w-64">
+            <nav className="space-y-2">
+              {tabs.map((tab) => (
+                <motion.button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                    activeTab === tab.id
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <tab.icon className="w-5 h-5" />
+                  <span className="font-medium">{tab.label}</span>
+                </motion.button>
+              ))}
+            </nav>
           </div>
-        )}
-      </main>
+
+          {/* Main Content */}
+          <div className="flex-1">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              {renderTabContent()}
+            </motion.div>
+          </div>
+        </div>
+      </div>
     </div>
   );
-};
-
-export default AdminPage;
+}
