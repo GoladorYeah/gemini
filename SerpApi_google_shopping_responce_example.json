@@ -1,0 +1,61 @@
+{
+  "search_metadata": {
+    "id": "68c45a4748c791981589cf19",
+    "status": "Success",
+    "json_endpoint": "https://serpapi.com/searches/990e79535d0e80fe/68c45a4748c791981589cf19.json",
+    "created_at": "2025-09-12 17:37:11 UTC",
+    "processed_at": "2025-09-12 17:37:11 UTC",
+    "google_shopping_url": "https://www.google.com/search?udm=28&q=Apple+iPhone+16+Pro+Max%2C+256GB+Desert+Titanium&num=10&hl=en&gl=ch",
+    "raw_html_file": "https://serpapi.com/searches/990e79535d0e80fe/68c45a4748c791981589cf19.html",
+    "total_time_taken": 2.07
+  },
+  "search_parameters": {
+    "engine": "google_shopping",
+    "q": "Apple iPhone 16 Pro Max, 256GB Desert Titanium",
+    "google_domain": "google.com",
+    "hl": "en",
+    "gl": "ch",
+    "num": "10",
+    "device": "desktop"
+  },
+  "search_information": {
+    "query_displayed": "Apple iPhone 16 Pro Max, 256GB Desert Titanium",
+    "total_results": 221,
+    "time_taken_displayed": 0.38,
+    "shopping_results_state": "Results for exact spelling"
+  },
+  "shopping_results": [
+    {
+      "position": 1,
+      "title": "Apple iPhone 16 Pro Max",
+      "product_link": "https://www.google.com/shopping/product/15219730193521423332?gl=ch",
+      "product_id": "15219730193521423332",
+      "serpapi_product_api": "https://serpapi.com/search.json?engine=google_product&gl=ch&google_domain=google.com&hl=en&product_id=15219730193521423332",
+      "immersive_product_page_token": "eyJlaSI6IlNGckVhS2VZR2U2Undia1BuNXJfNEFFIiwicHJvZHVjdGlkIjoiIiwiY2F0YWxvZ2lkIjoiMTUyMTk3MzAxOTM1MjE0MjMzMzIiLCJoZWFkbGluZU9mZmVyRG9jaWQiOiIxNDU4NDQ4ODE4NTE3NDc4Njk2NCIsImltYWdlRG9jaWQiOiI2OTA0ODEyNzEwMDg1NDAxNTUwIiwicmRzIjoiUENfNTk0NzY2Nzk1OTY3NDQyNzk5MHxQUk9EX1BDXzU5NDc2Njc5NTk2NzQ0Mjc5OTAiLCJxdWVyeSI6IkFwcGxlK2lQaG9uZSsxNitQcm8rTWF4JTJDKzI1NkdCK0Rlc2VydCtUaXRhbml1bSIsImdwY2lkIjoiNTk0NzY2Nzk1OTY3NDQyNzk5MCIsIm1pZCI6IjU3NjQ2MjQ5Mjg0OTY5Mjg2OCIsInB2dCI6ImhnIiwidXVsZSI6bnVsbCwiZ2wiOiJjaCIsImhsIjoiZW4iLCJlbmdpbmUiOiJnb29nbGVfc2hvcHBpbmcifQ==",
+      "serpapi_immersive_product_api": "https://serpapi.com/search.json?engine=google_immersive_product&page_token=eyJlaSI6IlNGckVhS2VZR2U2Undia1BuNXJfNEFFIiwicHJvZHVjdGlkIjoiIiwiY2F0YWxvZ2lkIjoiMTUyMTk3MzAxOTM1MjE0MjMzMzIiLCJoZWFkbGluZU9mZmVyRG9jaWQiOiIxNDU4NDQ4ODE4NTE3NDc4Njk2NCIsImltYWdlRG9jaWQiOiI2OTA0ODEyNzEwMDg1NDAxNTUwIiwicmRzIjoiUENfNTk0NzY2Nzk1OTY3NDQyNzk5MHxQUk9EX1BDXzU5NDc2Njc5NTk2NzQ0Mjc5OTAiLCJxdWVyeSI6IkFwcGxlK2lQaG9uZSsxNitQcm8rTWF4JTJDKzI1NkdCK0Rlc2VydCtUaXRhbml1bSIsImdwY2lkIjoiNTk0NzY2Nzk1OTY3NDQyNzk5MCIsIm1pZCI6IjU3NjQ2MjQ5Mjg0OTY5Mjg2OCIsInB2dCI6ImhnIiwidXVsZSI6bnVsbCwiZ2wiOiJjaCIsImhsIjoiZW4iLCJlbmdpbmUiOiJnb29nbGVfc2hvcHBpbmcifQ%3D%3D",
+      "source": "galaxus.ch",
+      "source_icon": "https://serpapi.com/searches/68c45a4748c791981589cf19/images/c6298bb1d1259456d9c7f4a1220325fd790f4ec50119d3daa0376f5bd875b060.png",
+      "multiple_sources": true,
+      "price": "CHF 1’068.00",
+      "extracted_price": null,
+      "rating": 4.6,
+      "reviews": 25000,
+      "thumbnail": "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcRq-DPXuctkbZ7AbKnBRK599yQUAfhX2YLbh2FYu8cpKJ8YM_slb0RVuH9_bElxQGTWKcP3CJ7gwNHfOjKmIcZZR-CI60I-Sko0e6js7ZQA",
+      "serpapi_thumbnail": "https://serpapi.com/images/url/ZXex_nicDclXDoIwAADQExUIRlZiDKIyqgi4gB9iy57FlijX8VbeRt_v-35KxgjVeD7r8XMmLEsBQ73IFZQ9WIU5PHQ8LQdCqr5Yj6v_abqbqiYORrD1wgmzBsWyjmC_CeBSVWf_qudlKEYHVIr7aFIwgY4SHRPaIiG4TZaaoF379s3LHWJvYThy8XKt_FTDzsZxHADDlgQbnJtByKSayrGv_wAedDiH",
+      "thumbnails": [
+        "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcRq-DPXuctkbZ7AbKnBRK599yQUAfhX2YLbh2FYu8cpKJ8YM_slb0RVuH9_bElxQGTWKcP3CJ7gwNHfOjKmIcZZR-CI60I-Sko0e6js7ZQA",
+        "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcQiwxT7KoktvOatkvCGPelxO-j6lcL6sD-_f-4inmymCekMZmhsm060SpjB3k4pihaKTSXmy8tNuPABAj4NThaINJNaYFnhh-i1c0LkynZoetULGsyu0C12Sw",
+        "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcSSZNDq0yPL2_3Wi-I_cjdXn0DlvA-NbXslay4ze_EWFqTdYnGQqxk_Wt4o4Nice_Pt-dOCeN4txh5TVivJVBOTr6W3m_BLqHC--HuACQnz",
+        "https://encrypted-tbn3.gstatic.com/shopping?q=tbn:ANd9GcRCP0QI-gel1wxlC1ljhFnuM1iDxKJn7V2qK2KyTvEuqSkuj8ZsuHHdPXUFyseKWSMmCiyt578CbBwPC_zDAWyhkHwMZ7MdXtojPnAGouk3",
+        "https://encrypted-tbn3.gstatic.com/shopping?q=tbn:ANd9GcQSXKmUcjgTVvt1wJeXPLxix88z6LgtI5J3QpZcAI5zvdSUCyIdlFEuiZqZzbHK0Jy3VXLBo4XDkdfVe5oaNIRCD70GrWILMGS6dXAKnzRI"
+      ],
+      "serpapi_thumbnails": [
+        "https://serpapi.com/images/url/ZXex_nicDclXDoIwAADQExUIRlZiDKIyqgi4gB9iy57FlijX8VbeRt_v-35KxgjVeD7r8XMmLEsBQ73IFZQ9WIU5PHQ8LQdCqr5Yj6v_abqbqiYORrD1wgmzBsWyjmC_CeBSVWf_qudlKEYHVIr7aFIwgY4SHRPaIiG4TZaaoF379s3LHWJvYThy8XKt_FTDzsZxHADDlgQbnJtByKSayrGv_wAedDiH",
+        "https://serpapi.com/images/url/APJq3HicDcnbDsEwGADgJ6odLHNIRGZiwXRkk-BGqkq7rl3p79C38jrehu_2-344gLFDz2Oa3p0BdkZw0mHnaoGAoB3aKs_y1hihr-Pb6H_DBJ8HGd2I17vqLVsJz4KAfKbZmjXvAtVxQ_PYTtHxgiKhlVMpk6uD4lb5sV-aetKVkRGcLKtyp1wf8GOdTJI6whUnc7zAZD_TnCMRUD-XTh9aBts8s-7hp0FYvn4OFT_I",
+        "https://serpapi.com/images/url/9OMoKXicDclhCoIwGADQE02lVlAQoVZayEyUVv0Zug1d5XT6FelxulW3qff3fT8VQNsvbVtq3g0tSIGg0I5V9pCD4hZvaruvmrZVulyb1f-WLhGLgKfplWyMMxyjCZtShfaM38RZO5vHy0WkOPePfMCjZFu6M5m46CAx7zujgBtMFJfsCEjEviQY3tUsO6nX4eTFWTen05p5kQl9hMKn6yd6_AFdBjoF",
+        "https://serpapi.com/images/url/PSY_BnicDcn_DkJAAADgJ0JYI1trOqFMUyrmn5Y7c34duru4Hqe36m3q-_f7fjBjA7UUpSDwKQZWIInlRJdLyh6sgjLsO4XifhgqUm7G9f8s-4hWHjyDaHHaS2XRqtPcArWtsUt4qFbOHByIcdPGQAvE5bXjY9zw2swo930UpVdX0CJI4rADlWBLwwT5dorA_e3YicCNP4WZEaKU9XVEbK_njf4DaFc62g",
+        "https://serpapi.com/images/url/stJ7jnicDclREkJAAADQE4VGJDNNI0qLTIh2_LG7oWIXm-I43arb1Pt930_JOet1USQN6kbGCZ7xvJGFoucZr5CAaC32JWWsaopNu_6fbvh4ZaMggm4do1txTgY-fzkEnrx39da0SfUKDhRHDliKDKBMA45icwT4sd89q7RNp_zgSs4oJ9Db0gW07viaEIVmPghNaynZ3QV4RztSMTTcZgrBD3btOdc"
+      ]
+    }
+  ]
+}

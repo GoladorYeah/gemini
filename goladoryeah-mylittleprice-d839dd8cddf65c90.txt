@@ -1,0 +1,1972 @@
+Directory structure:
+└── pricerunner-parser/
+    ├── config.yaml
+    ├── go.mod
+    ├── main.go
+    └── internal/
+        ├── config/
+        │   └── config.go
+        ├── downloader/
+        │   └── image.go
+        ├── models/
+        │   └── product.go
+        ├── parser/
+        │   └── parser.go
+        └── storage/
+            ├── database.go
+            ├── factory.go
+            ├── json.go
+            └── storage.go
+
+================================================
+FILE: pricerunner-parser/config.yaml
+================================================
+# Конфигурация парсера PriceRunner (ускоренная версия)
+parser:
+  # URL категории для парсинга
+  base_url: "https://www.pricerunner.com/cl/1/Mobile-Phones"
+  
+  # Настройки браузера
+  browser:
+    headless: true
+    timeout: 20000  # Уменьшено до 20 секунд
+    viewport:
+      width: 1920
+      height: 1080
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  
+  # Настройки парсинга (максимально ускорено)
+  parsing:
+    max_pages: 5
+    delay_between_requests: 500   # Уменьшено с 1000 до 500ms
+    scroll_delay: 200             # Уменьшено с 200 до 150ms  
+    max_scrolls: 20               # Уменьшено с 20 до 15
+    
+  # Селекторы для элементов
+  selectors:
+    # Карточки товаров на странице списка
+    product_cards: "a[data-discover='true'][href*='/pl/'][title]"
+    
+    # Цена - берется второй span
+    price: "span.pr-1fcg5be"
+    price_current: "div.pr-1ymxntz div.pr-i5pc8s:nth-child(2) span.pr-1fcg5be"
+    
+    # Описание товара - несколько вариантов
+    description: "div.EhfYw80fYG.pr-yp5co9-RichText"
+    description_alt: "div[class*='RichText']"
+    description_fallback: "div[class*='description'], section[class*='description']"
+    
+    # Изображения
+    main_image: "img.pr-xahiol"
+    additional_images: "div.pr-rda78c button img"
+    
+    # Таблицы характеристик
+    feature_tables: "div.pr-1omptzn-Table-root table.pr-1regpt0-Table-table"
+    
+    # Навигация
+    next_page_button: "button[aria-label='Go to next page']:not([disabled])"
+
+# Настройки конвертации валют
+currency:
+  gbp_to_eur: 1.15
+
+# Настройки хранения
+storage:
+  type: "json"
+  output_dir: "./output"
+  images_dir: "./images"
+  
+  database:
+    host: "localhost"
+    port: 5432
+    user: "parser"
+    password: "password"
+    database: "pricerunner"
+    
+# Настройки логирования
+logging:
+  level: "info"
+  file: "./logs/parser.log"
+
+
+================================================
+FILE: pricerunner-parser/go.mod
+================================================
+module pricerunner-parser
+
+go 1.25
+
+require (
+	github.com/lib/pq v1.10.9
+	github.com/playwright-community/playwright-go v0.5200.0
+	gopkg.in/yaml.v3 v3.0.1
+)
+
+require (
+	github.com/deckarep/golang-set/v2 v2.7.0 // indirect
+	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
+	github.com/go-stack/stack v1.8.1 // indirect
+	github.com/kr/text v0.2.0 // indirect
+)
+
+
+
+================================================
+FILE: pricerunner-parser/main.go
+================================================
+package main
+
+import (
+	"flag"
+	"log"
+	"pricerunner-parser/internal/config"
+	"pricerunner-parser/internal/parser"
+	"pricerunner-parser/internal/storage"
+)
+
+func main() {
+	// Флаги командной строки
+	configPath := flag.String("config", "config.yaml", "Path to configuration file")
+	flag.Parse()
+
+	// Загружаем конфигурацию
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// Создаем хранилище через фабрику
+	store, err := storage.NewStorage(cfg)
+	if err != nil {
+		log.Fatalf("Failed to create storage: %v", err)
+	}
+	defer store.Close()
+
+	// Создаем парсер
+	p := parser.New(cfg, store)
+
+	// Запускаем парсинг
+	if err := p.Parse(); err != nil {
+		log.Fatalf("Parsing failed: %v", err)
+	}
+
+	log.Println("Parsing completed successfully!")
+}
+
+
+
+================================================
+FILE: pricerunner-parser/internal/config/config.go
+================================================
+package config
+
+import (
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Config represents the application configuration
+type Config struct {
+	Parser   ParserConfig   `yaml:"parser"`
+	Currency CurrencyConfig `yaml:"currency"`
+	Storage  StorageConfig  `yaml:"storage"`
+	Logging  LoggingConfig  `yaml:"logging"`
+}
+
+// ParserConfig contains parsing-related settings
+type ParserConfig struct {
+	BaseURL   string          `yaml:"base_url"`
+	Browser   BrowserConfig   `yaml:"browser"`
+	Parsing   ParsingConfig   `yaml:"parsing"`
+	Selectors SelectorsConfig `yaml:"selectors"`
+}
+
+// BrowserConfig contains browser settings
+type BrowserConfig struct {
+	Headless  bool           `yaml:"headless"`
+	Timeout   int            `yaml:"timeout"`
+	Viewport  ViewportConfig `yaml:"viewport"`
+	UserAgent string         `yaml:"user_agent"`
+}
+
+// ViewportConfig contains viewport settings
+type ViewportConfig struct {
+	Width  int `yaml:"width"`
+	Height int `yaml:"height"`
+}
+
+// ParsingConfig contains parsing behavior settings
+type ParsingConfig struct {
+	MaxPages             int `yaml:"max_pages"`
+	DelayBetweenRequests int `yaml:"delay_between_requests"`
+	ScrollDelay          int `yaml:"scroll_delay"`
+	MaxScrolls           int `yaml:"max_scrolls"`
+}
+
+// SelectorsConfig contains CSS selectors
+type SelectorsConfig struct {
+	ProductCards     string `yaml:"product_cards"`
+	Price            string `yaml:"price"`
+	MainImage        string `yaml:"main_image"`
+	AdditionalImages string `yaml:"additional_images"`
+	FeatureTables    string `yaml:"feature_tables"`
+	NextPageButton   string `yaml:"next_page_button"`
+}
+
+// CurrencyConfig contains currency conversion settings
+type CurrencyConfig struct {
+	GBPToEUR float64 `yaml:"gbp_to_eur"`
+}
+
+// StorageConfig contains storage settings
+type StorageConfig struct {
+	Type      string         `yaml:"type"`
+	OutputDir string         `yaml:"output_dir"`
+	ImagesDir string         `yaml:"images_dir"`
+	Database  DatabaseConfig `yaml:"database"`
+}
+
+// DatabaseConfig contains database connection settings
+type DatabaseConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Database string `yaml:"database"`
+}
+
+// LoggingConfig contains logging settings
+type LoggingConfig struct {
+	Level string `yaml:"level"`
+	File  string `yaml:"file"`
+}
+
+// Load reads and parses the configuration file
+func Load(configPath string) (*Config, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	// Создаем необходимые директории
+	if err := os.MkdirAll(config.Storage.OutputDir, 0755); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(config.Storage.ImagesDir, 0755); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+
+
+================================================
+FILE: pricerunner-parser/internal/downloader/image.go
+================================================
+package downloader
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+)
+
+// ImageDownloader handles image downloading
+type ImageDownloader struct {
+	imagesDir string
+	client    *http.Client
+}
+
+// NewImageDownloader creates a new image downloader
+func NewImageDownloader(imagesDir string) *ImageDownloader {
+	return &ImageDownloader{
+		imagesDir: imagesDir,
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
+// DownloadImage downloads an image and returns the local path
+func (d *ImageDownloader) DownloadImage(url, productID string) (string, error) {
+	if url == "" || strings.HasPrefix(url, "data:") {
+		return "", fmt.Errorf("invalid URL: %s", url)
+	}
+
+	// Нормализуем URL
+	normalizedURL := d.normalizeURL(url)
+
+	// Определяем расширение файла
+	ext := d.extractExtension(normalizedURL)
+
+	// Создаем безопасное имя файла
+	safeProductID := d.sanitizeFilename(productID)
+	filename := fmt.Sprintf("%s.%s", safeProductID, ext)
+	localPath := filepath.Join(d.imagesDir, filename)
+
+	// Проверяем, существует ли файл
+	if _, err := os.Stat(localPath); err == nil {
+		return localPath, nil // Файл уже существует
+	}
+
+	// Создаем HTTP запрос
+	req, err := http.NewRequest("GET", normalizedURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Устанавливаем заголовки
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+	req.Header.Set("Referer", "https://www.pricerunner.com/")
+
+	// Выполняем запрос
+	resp, err := d.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to download image: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("bad status: %d", resp.StatusCode)
+	}
+
+	// Создаем файл
+	file, err := os.Create(localPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	// Копируем содержимое
+	_, err = io.Copy(file, resp.Body)
+	if err != nil {
+		os.Remove(localPath) // Удаляем частично загруженный файл
+		return "", fmt.Errorf("failed to save image: %w", err)
+	}
+
+	return localPath, nil
+}
+
+// normalizeURL нормализует URL изображения
+func (d *ImageDownloader) normalizeURL(url string) string {
+	if strings.HasPrefix(url, "//") {
+		return "https:" + url
+	}
+	if strings.HasPrefix(url, "/") {
+		return "https://www.pricerunner.com" + url
+	}
+	return url
+}
+
+// extractExtension извлекает расширение файла из URL
+func (d *ImageDownloader) extractExtension(url string) string {
+	re := regexp.MustCompile(`\.([a-zA-Z0-9]+)(?:\?|$)`)
+	matches := re.FindStringSubmatch(url)
+	if len(matches) > 1 {
+		ext := strings.ToLower(matches[1])
+		// Проверяем, что это действительно расширение изображения
+		validExts := map[string]bool{
+			"jpg": true, "jpeg": true, "png": true, "gif": true,
+			"webp": true, "avif": true, "svg": true, "bmp": true,
+		}
+		if validExts[ext] {
+			return ext
+		}
+	}
+	return "jpg" // По умолчанию
+}
+
+// sanitizeFilename создает безопасное имя файла
+func (d *ImageDownloader) sanitizeFilename(filename string) string {
+	// Заменяем недопустимые символы на подчеркивания
+	re := regexp.MustCompile(`[^\w\-]`)
+	return re.ReplaceAllString(filename, "_")
+}
+
+
+
+================================================
+FILE: pricerunner-parser/internal/models/product.go
+================================================
+package models
+
+import "time"
+
+// Product represents a product with all its details
+type Product struct {
+	ID          string            `json:"id" db:"id"`
+	Title       string            `json:"title" db:"title"`
+	URL         string            `json:"url" db:"url"`
+	ImageURL    string            `json:"image_url,omitempty" db:"image_url"`
+	ImageLocal  string            `json:"image_local,omitempty" db:"image_local"`
+	Price       *PriceInfo        `json:"price_info,omitempty" db:"-"`
+	Features    map[string]string `json:"features,omitempty" db:"-"`
+	Categories  []string          `json:"categories,omitempty" db:"-"`
+	ExtraImages []ImageInfo       `json:"additional_images,omitempty" db:"-"`
+	CreatedAt   time.Time         `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at" db:"updated_at"`
+}
+
+// PriceInfo contains price information
+type PriceInfo struct {
+	PriceGBP   string  `json:"price_gbp,omitempty"`
+	PriceEUR   float64 `json:"price_eur,omitempty"`
+	OfferCount string  `json:"offer_count,omitempty"`
+}
+
+// ImageInfo contains information about additional images
+type ImageInfo struct {
+	URL   string `json:"url"`
+	Local string `json:"local"`
+}
+
+// BasicProduct represents a product with basic information from list page
+type BasicProduct struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	URL   string `json:"url"`
+}
+
+// ProductExists represents a check for product existence
+type ProductExists struct {
+	ID     string
+	Exists bool
+}
+
+
+
+================================================
+FILE: pricerunner-parser/internal/parser/parser.go
+================================================
+package parser
+
+import (
+	"fmt"
+	"log"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"pricerunner-parser/internal/config"
+	"pricerunner-parser/internal/downloader"
+	"pricerunner-parser/internal/models"
+	"pricerunner-parser/internal/storage"
+
+	"github.com/playwright-community/playwright-go"
+)
+
+// Parser handles the main parsing logic
+type Parser struct {
+	config     *config.Config
+	storage    storage.Storage
+	downloader *downloader.ImageDownloader
+	playwright *playwright.Playwright
+	browser    playwright.Browser
+}
+
+// New creates a new parser instance
+func New(cfg *config.Config, store storage.Storage) *Parser {
+	return &Parser{
+		config:     cfg,
+		storage:    store,
+		downloader: downloader.NewImageDownloader(cfg.Storage.ImagesDir),
+	}
+}
+
+// Parse starts the parsing process
+func (p *Parser) Parse() error {
+	// Инициализируем Playwright
+	if err := p.initPlaywright(); err != nil {
+		return fmt.Errorf("failed to init playwright: %w", err)
+	}
+	defer p.cleanup()
+
+	var allProducts []models.Product
+	pageNumber := 1
+	maxPages := p.config.Parser.Parsing.MaxPages
+
+	// Если maxPages = 0, ставим разумный лимит чтобы не уходить в бесконечность
+	if maxPages == 0 {
+		maxPages = 50 // Разумный лимит
+	}
+
+	for pageNumber <= maxPages {
+		log.Printf("\n=== Processing page %d ===", pageNumber)
+
+		// Парсим список товаров на странице
+		basicProducts, hasNextPage, err := p.parseProductList(pageNumber)
+		if err != nil {
+			log.Printf("Failed to parse page %d: %v", pageNumber, err)
+			break
+		}
+
+		if len(basicProducts) == 0 {
+			log.Printf("No products found on page %d, stopping", pageNumber)
+			break
+		}
+
+		log.Printf("Found %d products on page %d", len(basicProducts), pageNumber)
+
+		// Фильтруем уже существующие товары
+		newProducts, err := p.filterExistingProducts(basicProducts)
+		if err != nil {
+			log.Printf("Warning: failed to filter existing products: %v", err)
+			newProducts = basicProducts // Продолжаем со всеми товарами
+		}
+
+		log.Printf("New products to process: %d", len(newProducts))
+
+		// Получаем детальную информацию
+		detailedProducts := p.parseProductDetails(newProducts)
+
+		// Сохраняем данные страницы
+		if len(detailedProducts) > 0 {
+			if err := p.storage.SaveProducts(detailedProducts, pageNumber); err != nil {
+				log.Printf("Warning: failed to save page %d: %v", pageNumber, err)
+			}
+			allProducts = append(allProducts, detailedProducts...)
+		}
+
+		log.Printf("=== Page %d completed: %d products processed ===", pageNumber, len(detailedProducts))
+
+		// Проверяем нужно ли продолжать
+		if !hasNextPage {
+			log.Printf("No more pages available, stopping at page %d", pageNumber)
+			break
+		}
+
+		// Переходим к следующей странице
+		pageNumber++
+		log.Printf("Moving to page %d...", pageNumber)
+		time.Sleep(time.Duration(p.config.Parser.Parsing.DelayBetweenRequests) * time.Millisecond)
+	}
+
+	// Сохраняем финальные данные
+	if len(allProducts) > 0 {
+		if err := p.storage.SaveFinalData(allProducts); err != nil {
+			return fmt.Errorf("failed to save final data: %w", err)
+		}
+
+		log.Printf("\n🎉 PARSING COMPLETED SUCCESSFULLY!")
+		log.Printf("📊 Total processed: %d products across %d pages", len(allProducts), pageNumber-1)
+
+		// Статистика по компонентам
+		withPrices := 0
+		withImages := 0
+		withFeatures := 0
+
+		for _, product := range allProducts {
+			if product.Price != nil && product.Price.PriceEUR > 0 {
+				withPrices++
+			}
+			if product.ImageLocal != "" {
+				withImages++
+			}
+			if len(product.Features) > 0 {
+				withFeatures++
+			}
+		}
+
+		log.Printf("💰 Products with prices: %d/%d", withPrices, len(allProducts))
+		log.Printf("🖼️  Products with images: %d/%d", withImages, len(allProducts))
+		log.Printf("⚙️  Products with features: %d/%d", withFeatures, len(allProducts))
+	}
+
+	return nil
+}
+
+// initPlaywright initializes Playwright browser
+func (p *Parser) initPlaywright() error {
+	pw, err := playwright.Run()
+	if err != nil {
+		return err
+	}
+	p.playwright = pw
+
+	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
+		Headless: &p.config.Parser.Browser.Headless,
+		Args: []string{
+			"--disable-blink-features=AutomationControlled",
+			"--no-sandbox",
+			"--disable-setuid-sandbox",
+		},
+	})
+	if err != nil {
+		return err
+	}
+	p.browser = browser
+
+	return nil
+}
+
+// cleanup closes browser and playwright
+func (p *Parser) cleanup() {
+	if p.browser != nil {
+		p.browser.Close()
+	}
+	if p.playwright != nil {
+		p.playwright.Stop()
+	}
+}
+
+// parseProductList parses the product list from a page
+func (p *Parser) parseProductList(pageNumber int) ([]models.BasicProduct, bool, error) {
+	context, err := p.browser.NewContext(playwright.BrowserNewContextOptions{
+		Viewport: &playwright.Size{
+			Width:  p.config.Parser.Browser.Viewport.Width,
+			Height: p.config.Parser.Browser.Viewport.Height,
+		},
+		UserAgent: &p.config.Parser.Browser.UserAgent,
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	defer context.Close()
+
+	page, err := context.NewPage()
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Переходим на страницу с номером
+	url := fmt.Sprintf("%s?page=%d", p.config.Parser.BaseURL, pageNumber)
+	log.Printf("Loading page: %s", url)
+
+	response, err := page.Goto(url, playwright.PageGotoOptions{
+		WaitUntil: playwright.WaitUntilStateDomcontentloaded,
+		Timeout:   playwright.Float(float64(p.config.Parser.Browser.Timeout)),
+	})
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Проверяем статус ответа
+	if response.Status() == 404 {
+		log.Printf("  Page %d returned 404, no more pages", pageNumber)
+		return nil, false, nil
+	}
+
+	// Ждем загрузки товаров
+	_, err = page.WaitForSelector(p.config.Parser.Selectors.ProductCards, playwright.PageWaitForSelectorOptions{
+		Timeout: playwright.Float(10000),
+	})
+	if err != nil {
+		log.Printf("  No products found on page %d", pageNumber)
+		return nil, false, nil
+	}
+
+	// Прокручиваем страницу для загрузки всех товаров
+	p.scrollPage(page)
+
+	// Извлекаем товары
+	products := p.extractProductCards(page)
+
+	if len(products) == 0 {
+		log.Printf("  No products extracted from page %d", pageNumber)
+		return nil, false, nil
+	}
+
+	// Определяем есть ли следующая страница по количеству товаров
+	hasNextPage := p.hasNextPage(len(products), pageNumber)
+
+	return products, hasNextPage, nil
+}
+
+// scrollPage scrolls the page to load all products
+func (p *Parser) scrollPage(page playwright.Page) {
+	scrollDelay := time.Duration(p.config.Parser.Parsing.ScrollDelay) * time.Millisecond
+	maxScrolls := p.config.Parser.Parsing.MaxScrolls
+
+	log.Println("Scrolling page to load all products...")
+
+	var lastHeight float64
+	stableCount := 0
+
+	for i := 0; i < maxScrolls; i++ {
+		// Прокручиваем вниз
+		page.Evaluate("window.scrollBy(0, 500)")
+		time.Sleep(scrollDelay)
+
+		// Проверяем изменилась ли высота
+		heightResult, err := page.Evaluate("document.body.scrollHeight")
+		if err != nil {
+			break
+		}
+
+		var currentHeight float64
+		switch h := heightResult.(type) {
+		case int:
+			currentHeight = float64(h)
+		case int64:
+			currentHeight = float64(h)
+		case float64:
+			currentHeight = h
+		case float32:
+			currentHeight = float64(h)
+		default:
+			currentHeight = 0
+		}
+
+		if currentHeight == lastHeight {
+			stableCount++
+			if stableCount >= 3 {
+				break
+			}
+		} else {
+			stableCount = 0
+		}
+
+		lastHeight = currentHeight
+	}
+
+	// Возвращаемся наверх
+	page.Evaluate("window.scrollTo(0, 0)")
+	time.Sleep(time.Second)
+}
+
+// extractProductCards extracts product information from page
+func (p *Parser) extractProductCards(page playwright.Page) []models.BasicProduct {
+	cards, err := page.QuerySelectorAll(p.config.Parser.Selectors.ProductCards)
+	if err != nil {
+		log.Printf("Error querying product cards: %v", err)
+		return nil
+	}
+
+	var products []models.BasicProduct
+
+	for _, card := range cards {
+		title, err := card.GetAttribute("title")
+		if err != nil || title == "" {
+			continue
+		}
+
+		href, err := card.GetAttribute("href")
+		if err != nil || href == "" {
+			continue
+		}
+
+		// Извлекаем ID из URL
+		re := regexp.MustCompile(`/pl/(\d+-\d+)/`)
+		matches := re.FindStringSubmatch(href)
+		if len(matches) < 2 {
+			continue
+		}
+
+		productID := matches[1]
+
+		// Формируем полный URL
+		fullURL := href
+		if !strings.HasPrefix(href, "http") {
+			fullURL = "https://www.pricerunner.com" + href
+		}
+
+		products = append(products, models.BasicProduct{
+			ID:    productID,
+			Title: title,
+			URL:   fullURL,
+		})
+	}
+
+	return products
+}
+
+// hasNextPage checks if there's a next page based on product count
+func (p *Parser) hasNextPage(productsCount int, pageNumber int) bool {
+	log.Printf("  Checking if page %d has next page...", pageNumber)
+
+	// Если на странице меньше товаров чем обычно, скорее всего это последняя страница
+	expectedProductsPerPage := 48
+
+	if productsCount < expectedProductsPerPage {
+		log.Printf("    Found only %d products (expected ~%d), likely last page", productsCount, expectedProductsPerPage)
+		return false
+	}
+
+	// Если достигли максимального числа страниц из конфига
+	if p.config.Parser.Parsing.MaxPages > 0 && pageNumber >= p.config.Parser.Parsing.MaxPages {
+		log.Printf("    Reached max pages limit (%d)", p.config.Parser.Parsing.MaxPages)
+		return false
+	}
+
+	log.Printf("    ✓ Page %d has %d products, assuming next page exists", pageNumber, productsCount)
+	return true
+}
+
+// filterExistingProducts filters out products that already exist
+func (p *Parser) filterExistingProducts(products []models.BasicProduct) ([]models.BasicProduct, error) {
+	existingIDs, err := p.storage.GetExistingProducts()
+	if err != nil {
+		return products, err // Возвращаем все товары если не можем проверить
+	}
+
+	existingSet := make(map[string]bool)
+	for _, id := range existingIDs {
+		existingSet[id] = true
+	}
+
+	var newProducts []models.BasicProduct
+	for _, product := range products {
+		if !existingSet[product.ID] {
+			newProducts = append(newProducts, product)
+		}
+	}
+
+	return newProducts, nil
+}
+
+// parseProductDetails gets detailed information for each product
+func (p *Parser) parseProductDetails(products []models.BasicProduct) []models.Product {
+	var detailedProducts []models.Product
+
+	for i, basicProduct := range products {
+		log.Printf("[%d/%d] Processing: %s (ID: %s)", i+1, len(products),
+			truncateString(basicProduct.Title, 50), basicProduct.ID)
+
+		details, err := p.parseProductDetail(basicProduct)
+		if err != nil {
+			log.Printf("  ✗ Failed to parse details: %v", err)
+			continue
+		}
+
+		detailedProducts = append(detailedProducts, *details)
+
+		// Компактная статистика
+		var stats []string
+
+		if details.Price != nil && details.Price.PriceEUR > 0 {
+			stats = append(stats, fmt.Sprintf("Price: €%.2f", details.Price.PriceEUR))
+		}
+
+		if details.ImageLocal != "" {
+			stats = append(stats, "Image: ✓")
+		}
+
+		if len(details.Features) > 0 {
+			stats = append(stats, fmt.Sprintf("Features: %d", len(details.Features)))
+		}
+
+		if len(details.ExtraImages) > 0 {
+			stats = append(stats, fmt.Sprintf("ExtraImg: %d", len(details.ExtraImages)))
+		}
+
+		// Выводим все в одной строке
+		if len(stats) > 0 {
+			log.Printf("  ✓ %s", strings.Join(stats, ", "))
+		}
+
+		// Пауза между запросами
+		time.Sleep(time.Duration(p.config.Parser.Parsing.DelayBetweenRequests) * time.Millisecond)
+	}
+
+	return detailedProducts
+}
+
+// parseProductDetail parses detailed information for a single product
+func (p *Parser) parseProductDetail(basic models.BasicProduct) (*models.Product, error) {
+	context, err := p.browser.NewContext(playwright.BrowserNewContextOptions{
+		Viewport: &playwright.Size{
+			Width:  p.config.Parser.Browser.Viewport.Width,
+			Height: p.config.Parser.Browser.Viewport.Height,
+		},
+		UserAgent: &p.config.Parser.Browser.UserAgent,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer context.Close()
+
+	page, err := context.NewPage()
+	if err != nil {
+		return nil, err
+	}
+
+	// Переходим на страницу товара
+	if _, err := page.Goto(basic.URL, playwright.PageGotoOptions{
+		WaitUntil: playwright.WaitUntilStateDomcontentloaded,
+		Timeout:   playwright.Float(float64(p.config.Parser.Browser.Timeout)),
+	}); err != nil {
+		return nil, err
+	}
+
+	// Минимальная пауза для начальной загрузки
+	time.Sleep(500 * time.Millisecond)
+
+	// Универсальная прокрутка для загрузки всего контента
+	p.scrollToFeatures(page)
+
+	// Создаем объект продукта
+	product := &models.Product{
+		ID:        basic.ID,
+		Title:     basic.Title,
+		URL:       basic.URL,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// Парсим все данные
+	product.Price = p.parsePrice(page)
+	p.parseMainImage(page, product)
+	product.ExtraImages = p.parseAdditionalImages(page, basic.ID)
+	product.Features = p.parseFeatures(page)
+
+	return product, nil
+}
+
+// scrollToFeatures улучшенная прокрутка для загрузки всего контента
+func (p *Parser) scrollToFeatures(page playwright.Page) {
+	log.Printf("  Loading all page content...")
+
+	// Стратегия: быстро прокрутить всю страницу для загрузки контента
+
+	// 1. Прокручиваем до конца страницы
+	page.Evaluate("window.scrollTo(0, document.body.scrollHeight)")
+	time.Sleep(1 * time.Second)
+
+	// 2. Проверяем есть ли таблицы
+	tablesCount := p.checkTablesCountQuick(page)
+	log.Printf("    After full scroll: %d tables found", tablesCount)
+
+	// 3. Если таблиц мало, делаем дополнительные прокрутки
+	if tablesCount < 2 {
+		log.Printf("    Need more content, doing additional scrolling...")
+
+		// Прокручиваем к разным частям страницы
+		positions := []string{
+			"document.body.scrollHeight * 0.75", // 75%
+			"document.body.scrollHeight * 0.5",  // 50%
+			"document.body.scrollHeight * 0.25", // 25%
+		}
+
+		for _, pos := range positions {
+			page.Evaluate(fmt.Sprintf("window.scrollTo(0, %s)", pos))
+			time.Sleep(500 * time.Millisecond)
+		}
+
+		// Финальная прокрутка к концу
+		page.Evaluate("window.scrollTo(0, document.body.scrollHeight)")
+		time.Sleep(1 * time.Second)
+	}
+
+	// 4. Позиционируемся в середине для парсинга
+	page.Evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+	time.Sleep(500 * time.Millisecond)
+
+	finalCount := p.checkTablesCountQuick(page)
+	log.Printf("    Final: %d tables loaded", finalCount)
+}
+
+// checkTablesCountQuick быстрая проверка количества таблиц
+func (p *Parser) checkTablesCountQuick(page playwright.Page) int {
+	// Пробуем основной селектор
+	tables, err := page.QuerySelectorAll(p.config.Parser.Selectors.FeatureTables)
+	if err == nil && len(tables) > 0 {
+		return len(tables)
+	}
+
+	// Пробуем альтернативные селекторы
+	altSelectors := []string{
+		"table.pr-1regpt0-Table-table",
+		"div[class*='Table'] table",
+		"table",
+	}
+
+	maxCount := 0
+	for _, selector := range altSelectors {
+		tables, err := page.QuerySelectorAll(selector)
+		if err == nil && len(tables) > maxCount {
+			maxCount = len(tables)
+		}
+	}
+
+	return maxCount
+}
+
+// parsePrice parses price using the improved selector for second span
+func (p *Parser) parsePrice(page playwright.Page) *models.PriceInfo {
+	log.Printf("    Looking for price (second span)...")
+
+	// Способ 1: Ищем все span'ы с нужным классом и берем второй
+	priceElements, err := page.QuerySelectorAll("span.pr-1fcg5be")
+	if err != nil || len(priceElements) < 2 {
+		log.Printf("    Not enough price elements found (need 2, got %d)", len(priceElements))
+		return p.parsePriceFallback(page)
+	}
+
+	// Берем второй элемент (индекс 1)
+	secondPriceElement := priceElements[1]
+
+	priceText, err := secondPriceElement.InnerText()
+	if err != nil || priceText == "" {
+		log.Printf("    Failed to get text from second price element")
+		return p.parsePriceFallback(page)
+	}
+
+	priceText = strings.TrimSpace(priceText)
+	log.Printf("    Found price (second span): %s", priceText)
+
+	// Конвертируем в EUR
+	priceEUR := p.convertGBPToEUR(priceText)
+
+	return &models.PriceInfo{
+		PriceGBP: priceText,
+		PriceEUR: priceEUR,
+	}
+}
+
+// parsePriceFallback - альтернативные способы поиска цены
+func (p *Parser) parsePriceFallback(page playwright.Page) *models.PriceInfo {
+	log.Printf("    Trying fallback price selectors...")
+
+	// Способ 2: Ищем по тексту "Lowest Price Now"
+	nowPriceSelector := `//p[contains(text(), "Lowest Price Now")]/following-sibling::span[@class="pr-1fcg5be"]`
+	if priceElement, err := page.QuerySelector(nowPriceSelector); err == nil && priceElement != nil {
+		if priceText, err := priceElement.InnerText(); err == nil && priceText != "" {
+			log.Printf("    Found price via 'Lowest Price Now': %s", strings.TrimSpace(priceText))
+			return &models.PriceInfo{
+				PriceGBP: strings.TrimSpace(priceText),
+				PriceEUR: p.convertGBPToEUR(priceText),
+			}
+		}
+	}
+
+	// Способ 3: Ищем по структуре DOM - второй div с классом pr-i5pc8s
+	structureSelector := `div.pr-1ymxntz div.pr-i5pc8s:nth-child(2) span.pr-1fcg5be`
+	if priceElement, err := page.QuerySelector(structureSelector); err == nil && priceElement != nil {
+		if priceText, err := priceElement.InnerText(); err == nil && priceText != "" {
+			log.Printf("    Found price via structure selector: %s", strings.TrimSpace(priceText))
+			return &models.PriceInfo{
+				PriceGBP: strings.TrimSpace(priceText),
+				PriceEUR: p.convertGBPToEUR(priceText),
+			}
+		}
+	}
+
+	log.Printf("    ⚠ No price found with any method")
+	return nil
+}
+
+// convertGBPToEUR converts GBP price to EUR
+func (p *Parser) convertGBPToEUR(priceStr string) float64 {
+	// Удаляем символы валюты и пробелы
+	re := regexp.MustCompile(`[£€\s,]`)
+	cleanPrice := re.ReplaceAllString(priceStr, "")
+
+	price, err := strconv.ParseFloat(cleanPrice, 64)
+	if err != nil {
+		return 0
+	}
+
+	return price * p.config.Currency.GBPToEUR
+}
+
+// parseMainImage parses the main product image
+func (p *Parser) parseMainImage(page playwright.Page, product *models.Product) {
+	log.Printf("  Looking for images...")
+
+	selectors := []string{
+		p.config.Parser.Selectors.MainImage,
+		"picture.pr-lpjxdi source[type='image/jpeg']",
+		"img[itemprop='image']",
+		"div.pr-15dcama img",
+	}
+
+	var imageURL string
+
+	for _, selector := range selectors {
+		if strings.Contains(selector, "source") {
+			source, err := page.QuerySelector(selector)
+			if err == nil && source != nil {
+				srcset, _ := source.GetAttribute("srcset")
+				if srcset != "" {
+					urls := strings.Split(srcset, ",")
+					if len(urls) > 0 {
+						imageURL = strings.TrimSpace(strings.Fields(urls[len(urls)-1])[0])
+						break
+					}
+				}
+			}
+		} else {
+			img, err := page.QuerySelector(selector)
+			if err == nil && img != nil {
+				srcset, _ := img.GetAttribute("srcset")
+				if srcset != "" {
+					urls := strings.Split(srcset, ",")
+					if len(urls) > 0 {
+						imageURL = strings.TrimSpace(strings.Fields(urls[len(urls)-1])[0])
+						break
+					}
+				} else {
+					src, _ := img.GetAttribute("src")
+					if src != "" && !strings.HasPrefix(src, "data:") {
+						imageURL = src
+						break
+					}
+				}
+			}
+		}
+	}
+
+	product.ImageURL = imageURL
+
+	if imageURL != "" {
+		localPath, err := p.downloader.DownloadImage(imageURL, product.ID)
+		if err != nil {
+			log.Printf("    ✗ Failed to download main image: %v", err)
+		} else {
+			product.ImageLocal = localPath
+		}
+	} else {
+		log.Printf("    ⚠ Main image not found")
+	}
+}
+
+// parseAdditionalImages parses additional product images
+func (p *Parser) parseAdditionalImages(page playwright.Page, productID string) []models.ImageInfo {
+	log.Printf("  Looking for additional images...")
+
+	thumbnails, err := page.QuerySelectorAll(p.config.Parser.Selectors.AdditionalImages)
+	if err != nil {
+		return nil
+	}
+
+	var additionalImages []models.ImageInfo
+	maxImages := 3 // Ограничиваем для скорости
+
+	for i, thumb := range thumbnails {
+		if i >= maxImages {
+			break
+		}
+
+		src, err := thumb.GetAttribute("src")
+		if err != nil || src == "" || strings.HasPrefix(src, "data:") {
+			continue
+		}
+
+		// Заменяем размер на больший
+		re := regexp.MustCompile(`/\d+x\d+/`)
+		largeURL := re.ReplaceAllString(src, "/504x504/")
+
+		localPath, err := p.downloader.DownloadImage(largeURL, fmt.Sprintf("%s_extra_%d", productID, i+1))
+		if err != nil {
+			log.Printf("    ✗ Failed to download additional image %d: %v", i+1, err)
+			continue
+		}
+
+		additionalImages = append(additionalImages, models.ImageInfo{
+			URL:   largeURL,
+			Local: localPath,
+		})
+	}
+
+	return additionalImages
+}
+
+// parseFeatures парсинг таблицы с множественными заголовками внутри
+func (p *Parser) parseFeatures(page playwright.Page) map[string]string {
+	log.Printf("  Extracting features...")
+
+	features := make(map[string]string)
+
+	// Пробуем разные селекторы для таблиц
+	tableSelectors := []string{
+		p.config.Parser.Selectors.FeatureTables, // Основной
+		"table.pr-1regpt0-Table-table",          // Альтернативный
+		"div[class*='Table'] table",             // По части класса
+		"table",                                 // Любые таблицы
+	}
+
+	var tables []playwright.ElementHandle
+
+	for _, selector := range tableSelectors {
+		foundTables, err := page.QuerySelectorAll(selector)
+		if err == nil && len(foundTables) > 0 {
+			tables = foundTables
+			log.Printf("    Found %d tables with selector: %s", len(foundTables), selector)
+			break
+		}
+	}
+
+	if len(tables) == 0 {
+		log.Printf("    ⚠ No feature tables found with any selector")
+		return features
+	}
+
+	// Парсим каждую таблицу
+	for tableIdx, table := range tables {
+		log.Printf("    Processing table %d/%d", tableIdx+1, len(tables))
+
+		// Парсим таблицу с множественными заголовками
+		tableFeatures := p.parseTableWithMultipleHeaders(table)
+
+		// Объединяем с общим списком
+		for key, value := range tableFeatures {
+			features[key] = value
+		}
+	}
+
+	if len(features) > 0 {
+		log.Printf("    ✓ Total features found: %d", len(features))
+	} else {
+		log.Printf("    ⚠ No valid features extracted")
+	}
+
+	return features
+}
+
+// Исправляем parseTableWithMultipleHeaders - убираем неиспользуемую переменную
+func (p *Parser) parseTableWithMultipleHeaders(table playwright.ElementHandle) map[string]string {
+	features := make(map[string]string)
+
+	// Получаем все строки таблицы (и thead, и tbody)
+	allRows, err := table.QuerySelectorAll("tr")
+	if err != nil {
+		return features
+	}
+
+	currentCategory := "General"
+
+	for _, row := range allRows { // Убрали i, _
+		// Проверяем является ли строка заголовком
+		if p.isHeaderRow(row) {
+			// Это строка заголовка - извлекаем категорию
+			category := p.extractCategoryFromHeaderRow(row)
+			if category != "" {
+				currentCategory = category
+				log.Printf("      Found category header: '%s'", currentCategory)
+			}
+			continue
+		}
+
+		// Это строка данных - парсим характеристики
+		featureName, featureValue := p.extractFeatureFromRow(row)
+		if featureName != "" && featureValue != "" {
+			// Добавляем категорию к названию если она значимая
+			key := featureName
+			if currentCategory != "General" && currentCategory != "" {
+				key = fmt.Sprintf("%s: %s", currentCategory, featureName)
+			}
+
+			features[key] = featureValue
+		}
+	}
+
+	log.Printf("      Extracted %d features from table", len(features))
+	return features
+}
+
+// isHeaderRow проверяет является ли строка заголовком
+func (p *Parser) isHeaderRow(row playwright.ElementHandle) bool {
+	// Способ 1: Проверяем родительский элемент (thead)
+	script := `
+		let row = arguments[0];
+		let parent = row.parentElement;
+		return parent && parent.tagName === 'THEAD';
+	`
+	if result, err := row.Evaluate(script); err == nil {
+		if isInThead, ok := result.(bool); ok && isInThead {
+			return true
+		}
+	}
+
+	// Способ 2: Проверяем наличие th вместо td
+	ths, err := row.QuerySelectorAll("th")
+	if err == nil && len(ths) > 0 {
+		return true
+	}
+
+	// Способ 3: Проверяем CSS класс или data-атрибуты
+	class, _ := row.GetAttribute("class")
+	dataKind, _ := row.GetAttribute("data-kind")
+
+	if strings.Contains(class, "heading") || strings.Contains(class, "header") ||
+		dataKind == "heading" || dataKind == "header" {
+		return true
+	}
+
+	// Способ 4: Проверяем ячейки с data-kind="heading"
+	cells, err := row.QuerySelectorAll("td, th")
+	if err == nil {
+		for _, cell := range cells {
+			if cellDataKind, _ := cell.GetAttribute("data-kind"); cellDataKind == "heading" {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// extractCategoryFromHeaderRow извлекает название категории из строки заголовка
+func (p *Parser) extractCategoryFromHeaderRow(row playwright.ElementHandle) string {
+	// Ищем div.pr-f8aw3g с текстом
+	if categoryDiv, err := row.QuerySelector("div.pr-f8aw3g"); err == nil && categoryDiv != nil {
+		if categoryText, err := categoryDiv.InnerText(); err == nil && categoryText != "" {
+			cleaned := strings.TrimSpace(categoryText)
+			if p.isValidCategory(cleaned) {
+				return cleaned
+			}
+		}
+	}
+
+	// Альтернативно - ищем в th
+	if th, err := row.QuerySelector("th"); err == nil && th != nil {
+		if categoryText, err := th.InnerText(); err == nil && categoryText != "" {
+			cleaned := strings.TrimSpace(categoryText)
+			if p.isValidCategory(cleaned) {
+				return cleaned
+			}
+		}
+	}
+
+	// Ищем в любой ячейке
+	cells, err := row.QuerySelectorAll("td, th")
+	if err == nil && len(cells) > 0 {
+		if categoryText, err := cells[0].InnerText(); err == nil && categoryText != "" {
+			cleaned := strings.TrimSpace(categoryText)
+			if p.isValidCategory(cleaned) {
+				return cleaned
+			}
+		}
+	}
+
+	return ""
+}
+
+// extractFeatureFromRow извлекает характеристику из строки данных
+func (p *Parser) extractFeatureFromRow(row playwright.ElementHandle) (string, string) {
+	// Получаем ячейки td (не th)
+	cells, err := row.QuerySelectorAll("td")
+	if err != nil || len(cells) < 2 {
+		return "", ""
+	}
+
+	// Извлекаем название и значение
+	featureName, _ := cells[0].InnerText()
+	featureValue, _ := cells[1].InnerText()
+
+	featureName = strings.TrimSpace(featureName)
+	featureValue = strings.TrimSpace(featureValue)
+
+	// Валидация
+	if !p.isValidFeaturePair(featureName, featureValue) {
+		return "", ""
+	}
+
+	return featureName, featureValue
+}
+
+// isValidCategory проверяет является ли строка валидной категорией
+func (p *Parser) isValidCategory(category string) bool {
+	if len(category) < 2 || len(category) > 50 {
+		return false
+	}
+
+	// Исключаем пустые или служебные категории
+	excludes := []string{"", " ", "-", "–", "—", "N/A", "n/a", "TBD", "tbd"}
+	for _, exclude := range excludes {
+		if category == exclude {
+			return false
+		}
+	}
+
+	return true
+}
+
+// isValidFeaturePair проверяет валидность пары название-значение
+func (p *Parser) isValidFeaturePair(name, value string) bool {
+	if name == "" || value == "" {
+		return false
+	}
+
+	if name == value {
+		return false
+	}
+
+	if len(name) < 2 || len(value) < 1 {
+		return false
+	}
+
+	// Исключаем служебные строки
+	if strings.Contains(strings.ToLower(name), "compare") {
+		return false
+	}
+
+	return true
+}
+
+// Добавляем недостающую функцию truncateString в конец файла
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+
+
+================================================
+FILE: pricerunner-parser/internal/storage/database.go
+================================================
+package storage
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"pricerunner-parser/internal/config"
+	"pricerunner-parser/internal/models"
+
+	_ "github.com/lib/pq" // PostgreSQL driver
+)
+
+// DatabaseStorage implements Storage interface for PostgreSQL
+type DatabaseStorage struct {
+	db *sql.DB
+}
+
+// NewDatabaseStorage creates a new database storage instance
+func NewDatabaseStorage(cfg config.DatabaseConfig) (*DatabaseStorage, error) {
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database)
+
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	if err := db.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	storage := &DatabaseStorage{db: db}
+
+	// Создаем таблицы если их нет
+	if err := storage.createTables(); err != nil {
+		return nil, fmt.Errorf("failed to create tables: %w", err)
+	}
+
+	return storage, nil
+}
+
+// createTables creates necessary database tables
+func (d *DatabaseStorage) createTables() error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS products (
+			id VARCHAR(50) PRIMARY KEY,
+			title TEXT NOT NULL,
+			url TEXT NOT NULL,
+			image_url TEXT,
+			image_local TEXT,
+			price_gbp VARCHAR(20),
+			price_eur DECIMAL(10,2),
+			offer_count VARCHAR(10),
+			features JSONB,
+			categories TEXT[],
+			additional_images JSONB,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_products_price_eur ON products(price_eur)`,
+		`CREATE INDEX IF NOT EXISTS idx_products_title ON products USING gin(to_tsvector('english', title))`,
+	}
+
+	for _, query := range queries {
+		if _, err := d.db.Exec(query); err != nil {
+			return fmt.Errorf("failed to execute query: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// SaveProducts saves products to database (для совместимости, сохраняем все в основную таблицу)
+func (d *DatabaseStorage) SaveProducts(products []models.Product, pageNumber int) error {
+	if len(products) == 0 {
+		return nil
+	}
+
+	// Используем транзакцию для атомарности
+	tx, err := d.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	query := `
+		INSERT INTO products (
+			id, title, url, image_url, image_local, 
+			price_gbp, price_eur, offer_count, 
+			features, categories, additional_images, 
+			created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		ON CONFLICT (id) DO UPDATE SET
+			title = EXCLUDED.title,
+			url = EXCLUDED.url,
+			image_url = EXCLUDED.image_url,
+			image_local = EXCLUDED.image_local,
+			price_gbp = EXCLUDED.price_gbp,
+			price_eur = EXCLUDED.price_eur,
+			offer_count = EXCLUDED.offer_count,
+			features = EXCLUDED.features,
+			categories = EXCLUDED.categories,
+			additional_images = EXCLUDED.additional_images,
+			updated_at = EXCLUDED.updated_at
+	`
+
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, product := range products {
+		// Конвертируем сложные поля в JSON
+		featuresJSON, _ := json.Marshal(product.Features)
+		categoriesArray := fmt.Sprintf("{%s}", strings.Join(product.Categories, ","))
+		additionalImagesJSON, _ := json.Marshal(product.ExtraImages)
+
+		var priceGBP string
+		var priceEUR sql.NullFloat64
+		var offerCount string
+
+		if product.Price != nil {
+			priceGBP = product.Price.PriceGBP
+			if product.Price.PriceEUR > 0 {
+				priceEUR = sql.NullFloat64{Float64: product.Price.PriceEUR, Valid: true}
+			}
+			offerCount = product.Price.OfferCount
+		}
+
+		_, err := stmt.Exec(
+			product.ID,
+			product.Title,
+			product.URL,
+			product.ImageURL,
+			product.ImageLocal,
+			priceGBP,
+			priceEUR,
+			offerCount,
+			featuresJSON,
+			categoriesArray,
+			additionalImagesJSON,
+			product.CreatedAt,
+			product.UpdatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert product %s: %w", product.ID, err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+// SaveFinalData для БД это то же самое что и SaveProducts
+func (d *DatabaseStorage) SaveFinalData(products []models.Product) error {
+	return d.SaveProducts(products, 0)
+}
+
+// ProductExists checks if a product exists in database
+func (d *DatabaseStorage) ProductExists(productID string) (bool, error) {
+	var exists bool
+	query := "SELECT EXISTS(SELECT 1 FROM products WHERE id = $1)"
+	err := d.db.QueryRow(query, productID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check product existence: %w", err)
+	}
+	return exists, nil
+}
+
+// GetExistingProducts returns all existing product IDs
+func (d *DatabaseStorage) GetExistingProducts() ([]string, error) {
+	query := "SELECT id FROM products ORDER BY created_at DESC"
+	rows, err := d.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query existing products: %w", err)
+	}
+	defer rows.Close()
+
+	var productIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		productIDs = append(productIDs, id)
+	}
+
+	return productIDs, nil
+}
+
+// GetProductsByPriceRange returns products within price range
+func (d *DatabaseStorage) GetProductsByPriceRange(minPrice, maxPrice float64) ([]models.Product, error) {
+	query := `
+		SELECT id, title, url, image_url, image_local, 
+			   price_gbp, price_eur, offer_count, 
+			   features, categories, additional_images,
+			   created_at, updated_at 
+		FROM products 
+		WHERE price_eur BETWEEN $1 AND $2 
+		ORDER BY price_eur ASC
+	`
+
+	rows, err := d.db.Query(query, minPrice, maxPrice)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query products by price: %w", err)
+	}
+	defer rows.Close()
+
+	return d.scanProducts(rows)
+}
+
+// SearchProducts searches products by title
+func (d *DatabaseStorage) SearchProducts(searchTerm string) ([]models.Product, error) {
+	query := `
+		SELECT id, title, url, image_url, image_local, 
+			   price_gbp, price_eur, offer_count, 
+			   features, categories, additional_images,
+			   created_at, updated_at 
+		FROM products 
+		WHERE to_tsvector('english', title) @@ plainto_tsquery('english', $1)
+		ORDER BY created_at DESC
+	`
+
+	rows, err := d.db.Query(query, searchTerm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search products: %w", err)
+	}
+	defer rows.Close()
+
+	return d.scanProducts(rows)
+}
+
+// GetProductStats returns statistics about products
+func (d *DatabaseStorage) GetProductStats() (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// Общее количество
+	var totalCount int
+	if err := d.db.QueryRow("SELECT COUNT(*) FROM products").Scan(&totalCount); err == nil {
+		stats["total_products"] = totalCount
+	}
+
+	// С ценами
+	var withPrices int
+	if err := d.db.QueryRow("SELECT COUNT(*) FROM products WHERE price_eur IS NOT NULL").Scan(&withPrices); err == nil {
+		stats["products_with_prices"] = withPrices
+	}
+
+	// С изображениями
+	var withImages int
+	if err := d.db.QueryRow("SELECT COUNT(*) FROM products WHERE image_local IS NOT NULL AND image_local != ''").Scan(&withImages); err == nil {
+		stats["products_with_images"] = withImages
+	}
+
+	// Средняя цена
+	var avgPrice sql.NullFloat64
+	if err := d.db.QueryRow("SELECT AVG(price_eur) FROM products WHERE price_eur IS NOT NULL").Scan(&avgPrice); err == nil && avgPrice.Valid {
+		stats["average_price"] = avgPrice.Float64
+	}
+
+	// Минимальная и максимальная цены
+	var minPrice, maxPrice sql.NullFloat64
+	if err := d.db.QueryRow("SELECT MIN(price_eur), MAX(price_eur) FROM products WHERE price_eur IS NOT NULL").Scan(&minPrice, &maxPrice); err == nil {
+		if minPrice.Valid {
+			stats["min_price"] = minPrice.Float64
+		}
+		if maxPrice.Valid {
+			stats["max_price"] = maxPrice.Float64
+		}
+	}
+
+	return stats, nil
+}
+
+// scanProducts helper function to scan rows into Product structs
+func (d *DatabaseStorage) scanProducts(rows *sql.Rows) ([]models.Product, error) {
+	var products []models.Product
+
+	for rows.Next() {
+		var product models.Product
+		var featuresJSON, additionalImagesJSON []byte
+		var categories string
+		var priceGBP string
+		var priceEUR sql.NullFloat64
+		var offerCount string
+
+		err := rows.Scan(
+			&product.ID,
+			&product.Title,
+			&product.URL,
+			&product.ImageURL,
+			&product.ImageLocal,
+			&priceGBP,
+			&priceEUR,
+			&offerCount,
+			&featuresJSON,
+			&categories,
+			&additionalImagesJSON,
+			&product.CreatedAt,
+			&product.UpdatedAt,
+		)
+		if err != nil {
+			continue
+		}
+
+		// Восстанавливаем сложные поля
+		if len(featuresJSON) > 0 {
+			json.Unmarshal(featuresJSON, &product.Features)
+		}
+
+		if len(additionalImagesJSON) > 0 {
+			json.Unmarshal(additionalImagesJSON, &product.ExtraImages)
+		}
+
+		// Парсим массив категорий
+		if categories != "" {
+			categories = strings.Trim(categories, "{}")
+			if categories != "" {
+				product.Categories = strings.Split(categories, ",")
+			}
+		}
+
+		// Восстанавливаем цену
+		if priceGBP != "" || priceEUR.Valid {
+			product.Price = &models.PriceInfo{
+				PriceGBP:   priceGBP,
+				OfferCount: offerCount,
+			}
+			if priceEUR.Valid {
+				product.Price.PriceEUR = priceEUR.Float64
+			}
+		}
+
+		products = append(products, product)
+	}
+
+	return products, nil
+}
+
+// Close closes the database connection
+func (d *DatabaseStorage) Close() error {
+	if d.db != nil {
+		return d.db.Close()
+	}
+	return nil
+}
+
+
+
+================================================
+FILE: pricerunner-parser/internal/storage/factory.go
+================================================
+package storage
+
+import (
+	"fmt"
+	"pricerunner-parser/internal/config"
+)
+
+// NewStorage creates a storage instance based on configuration
+func NewStorage(cfg *config.Config) (Storage, error) {
+	switch cfg.Storage.Type {
+	case "json":
+		return NewJSONStorage(cfg.Storage.OutputDir), nil
+	case "database":
+		return NewDatabaseStorage(cfg.Storage.Database)
+	default:
+		return nil, fmt.Errorf("unsupported storage type: %s", cfg.Storage.Type)
+	}
+}
+
+
+
+================================================
+FILE: pricerunner-parser/internal/storage/json.go
+================================================
+package storage
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"pricerunner-parser/internal/models"
+)
+
+// JSONStorage implements Storage interface for JSON files
+type JSONStorage struct {
+	outputDir string
+}
+
+// NewJSONStorage creates a new JSON storage instance
+func NewJSONStorage(outputDir string) *JSONStorage {
+	return &JSONStorage{
+		outputDir: outputDir,
+	}
+}
+
+// SaveProducts saves products to a page-specific JSON file
+func (j *JSONStorage) SaveProducts(products []models.Product, pageNumber int) error {
+	if len(products) == 0 {
+		return nil
+	}
+
+	filename := fmt.Sprintf("products_page_%d_detailed.json", pageNumber)
+	filepath := filepath.Join(j.outputDir, filename)
+
+	file, err := os.Create(filepath)
+	if err != nil {
+		return fmt.Errorf("failed to create file %s: %w", filepath, err)
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	encoder.SetEscapeHTML(false)
+
+	if err := encoder.Encode(products); err != nil {
+		return fmt.Errorf("failed to encode products: %w", err)
+	}
+
+	return nil
+}
+
+// SaveFinalData saves all products to the final JSON file
+func (j *JSONStorage) SaveFinalData(products []models.Product) error {
+	if len(products) == 0 {
+		return nil
+	}
+
+	filepath := filepath.Join(j.outputDir, "all_products_detailed.json")
+
+	file, err := os.Create(filepath)
+	if err != nil {
+		return fmt.Errorf("failed to create final file: %w", err)
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	encoder.SetEscapeHTML(false)
+
+	if err := encoder.Encode(products); err != nil {
+		return fmt.Errorf("failed to encode final products: %w", err)
+	}
+
+	return nil
+}
+
+// ProductExists checks if a product exists in any of the JSON files
+func (j *JSONStorage) ProductExists(productID string) (bool, error) {
+	existingProducts, err := j.GetExistingProducts()
+	if err != nil {
+		return false, err
+	}
+
+	for _, id := range existingProducts {
+		if id == productID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// GetExistingProducts returns all product IDs from existing JSON files
+func (j *JSONStorage) GetExistingProducts() ([]string, error) {
+	var allIDs []string
+
+	// Читаем все JSON файлы в директории
+	files, err := filepath.Glob(filepath.Join(j.outputDir, "*.json"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to glob JSON files: %w", err)
+	}
+
+	for _, file := range files {
+		// Пропускаем системные файлы
+		if strings.Contains(filepath.Base(file), "temp") {
+			continue
+		}
+
+		products, err := j.readProductsFromFile(file)
+		if err != nil {
+			continue // Пропускаем файлы с ошибками
+		}
+
+		for _, product := range products {
+			allIDs = append(allIDs, product.ID)
+		}
+	}
+
+	return allIDs, nil
+}
+
+// readProductsFromFile reads products from a specific JSON file
+func (j *JSONStorage) readProductsFromFile(filePath string) ([]models.Product, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var products []models.Product
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&products); err != nil {
+		return nil, err
+	}
+
+	return products, nil
+}
+
+// Close implements Storage interface (no-op for JSON)
+func (j *JSONStorage) Close() error {
+	return nil
+}
+
+
+
+================================================
+FILE: pricerunner-parser/internal/storage/storage.go
+================================================
+package storage
+
+import "pricerunner-parser/internal/models"
+
+// Storage defines the interface for data storage
+type Storage interface {
+	// SaveProducts saves a slice of products
+	SaveProducts(products []models.Product, pageNumber int) error
+
+	// SaveFinalData saves all products to a final file/table
+	SaveFinalData(products []models.Product) error
+
+	// ProductExists checks if a product already exists
+	ProductExists(productID string) (bool, error)
+
+	// GetExistingProducts returns a list of existing product IDs
+	GetExistingProducts() ([]string, error)
+
+	// Close closes any open connections
+	Close() error
+}
+
+

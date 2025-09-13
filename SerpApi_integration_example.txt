@@ -1,0 +1,43 @@
+google_shopping example
+
+package main
+import (
+  g "github.com/serpapi/google-search-results-golang"
+)
+
+func main(){
+  parameter := map[string]string{
+    "engine": "google_shopping",
+    "google_domain": "google.com",
+    "q": "Apple iPhone 16 Pro Max, 256GB Desert Titanium",
+    "gl": "ch",
+    "hl": "en",
+    "num": "10",
+  }
+
+  search := g.NewGoogleSearch(parameter, "10f08f3639a72a7bbf102195981444376f7b1d044bcf40a6ef0f716d16422603")
+  results, err := search.GetJSON()
+}
+
+
+google_product example
+
+package main
+import (
+  g "github.com/serpapi/google-search-results-golang"
+)
+
+func main(){
+  parameter := map[string]string{
+    "engine": "google_product",
+    "google_domain": "google.com",
+    "product_id": "15219730193521423332",
+    "gl": "ch",
+    "hl": "en",
+    "offers": "1",
+    "filter": "condition:0",
+  }
+
+  search := g.NewGoogleSearch(parameter, "10f08f3639a72a7bbf102195981444376f7b1d044bcf40a6ef0f716d16422603")
+  results, err := search.GetJSON()
+}

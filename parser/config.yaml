@@ -1,0 +1,66 @@
+# Конфигурация парсера PriceRunner (ускоренная версия)
+parser:
+  # URL категории для парсинга
+  base_url: "https://www.pricerunner.com/cl/1/Mobile-Phones"
+  
+  # Настройки браузера
+  browser:
+    headless: true
+    timeout: 20000  # Уменьшено до 20 секунд
+    viewport:
+      width: 1920
+      height: 1080
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  
+  # Настройки парсинга (максимально ускорено)
+  parsing:
+    max_pages: 5
+    delay_between_requests: 500   # Уменьшено с 1000 до 500ms
+    scroll_delay: 200             # Уменьшено с 200 до 150ms  
+    max_scrolls: 20               # Уменьшено с 20 до 15
+    
+  # Селекторы для элементов
+  selectors:
+    # Карточки товаров на странице списка
+    product_cards: "a[data-discover='true'][href*='/pl/'][title]"
+    
+    # Цена - берется второй span
+    price: "span.pr-1fcg5be"
+    price_current: "div.pr-1ymxntz div.pr-i5pc8s:nth-child(2) span.pr-1fcg5be"
+    
+    # Описание товара - несколько вариантов
+    description: "div.EhfYw80fYG.pr-yp5co9-RichText"
+    description_alt: "div[class*='RichText']"
+    description_fallback: "div[class*='description'], section[class*='description']"
+    
+    # Изображения
+    main_image: "img.pr-xahiol"
+    additional_images: "div.pr-rda78c button img"
+    
+    # Таблицы характеристик
+    feature_tables: "div.pr-1omptzn-Table-root table.pr-1regpt0-Table-table"
+    
+    # Навигация
+    next_page_button: "button[aria-label='Go to next page']:not([disabled])"
+
+# Настройки конвертации валют
+currency:
+  gbp_to_eur: 1.15
+
+# Настройки хранения
+storage:
+  type: "json"
+  output_dir: "./output"
+  images_dir: "./images"
+  
+  database:
+    host: "localhost"
+    port: 5432
+    user: "parser"
+    password: "password"
+    database: "pricerunner"
+    
+# Настройки логирования
+logging:
+  level: "info"
+  file: "./logs/parser.log"

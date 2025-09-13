@@ -1,0 +1,67 @@
+{
+  "search_metadata": {
+    "id": "68c45cada289719c393fb1c7",
+    "status": "Success",
+    "json_endpoint": "https://serpapi.com/searches/8c22bf23fbbdafbf/68c45cada289719c393fb1c7.json",
+    "created_at": "2025-09-12 17:47:25 UTC",
+    "processed_at": "2025-09-12 17:47:25 UTC",
+    "google_product_url": "https://www.google.com/shopping/product/15219730193521423332/offers?gl=ch&hl=en&prds=pid:15219730193521423332,condition:0&sourceid=chrome&ie=UTF-8",
+    "raw_html_file": "https://serpapi.com/searches/8c22bf23fbbdafbf/68c45cada289719c393fb1c7.html",
+    "total_time_taken": 1.3
+  },
+  "search_parameters": {
+    "engine": "google_product",
+    "product_id": "15219730193521423332",
+    "offers": "1",
+    "filter": "condition:0",
+    "google_domain": "google.com",
+    "hl": "en",
+    "gl": "ch"
+  },
+  "product_results": {
+    "product_id": "15219730193521423332",
+    "title": "Apple iPhone 16 Pro Max 256GB Wüstensand",
+    "reviews": 25258,
+    "media": [
+      {
+        "type": "image",
+        "link": "https://encrypted-tbn1.gstatic.com/shopping?q=tbn:ANd9GcTgpTIiGQxRyDp_1-u2Rxizg1J8Rs9oF9-rohv9EHVYvEbjPeuZbHMdEiHqcFs3YG5dQrnpBZOoLMxY4kb0llFyOQHmEtQtiZzcmfPowaV23u8O_9vl0aDd&usqp=CAY"
+      }
+    ],
+    "immersive_product_page_token": "eyJjYXRhbG9naWQiOiIxNTIxOTczMDE5MzUyMTQyMzMzMiIsInF1ZXJ5IjoiQXBwbGUraVBob25lKzE2K1BybytNYXgrMjU2R0IrVyVDMyVCQ3N0ZW5zYW5kIiwiZ2wiOiJjaCIsImhsIjoiZW4iLCJlbmdpbmUiOiJnb29nbGVfcHJvZHVjdCJ9",
+    "serpapi_immersive_product_api": "https://serpapi.com/search.json?engine=google_immersive_product&page_token=eyJjYXRhbG9naWQiOiIxNTIxOTczMDE5MzUyMTQyMzMzMiIsInF1ZXJ5IjoiQXBwbGUraVBob25lKzE2K1BybytNYXgrMjU2R0IrVyVDMyVCQ3N0ZW5zYW5kIiwiZ2wiOiJjaCIsImhsIjoiZW4iLCJlbmdpbmUiOiJnb29nbGVfcHJvZHVjdCJ9"
+  },
+  "sellers_results": {
+    "online_sellers": [
+      {
+        "position": 1,
+        "name": "Swisscom",
+        "rating": 4.7,
+        "reviews_original": "(15 shop reviews)",
+        "reviews": 15,
+        "reviews_link": "https://www.google.com/url?q=https://www.google.com/shopping/ratings/account/metrics%3Fq%3Dswisscom.ch%26c%3DCH%26v%3D19%26hl%3Den&opi=95576897&sa=U&ved=0ahUKEwj0rK3549OPAxXHRzABHc2RL0QQ9-wCCB0&usg=AOvVaw1-EaBSBf7kbsNtbfiU3tMn",
+        "link": "https://www.google.com/url?q=https://www.swisscom.ch/bin/scs/ecommerce/productdetail%3Fsegment%3Dres%26language%3DDE%26productId%3D11068203%26payOption%3DONETIME%26srsltid%3DAfmBOoobLn49ivv85Qu_YWCmpMbNQogUBLkYeGiLtKdPyq3yN6vdLL7wagw&opi=95576897&sa=U&ved=0ahUKEwj0rK3549OPAxXHRzABHc2RL0QQ2ykIHA&usg=AOvVaw2hZhYIcULDP5_Msor4fNql",
+        "direct_link": "https://www.swisscom.ch/bin/scs/ecommerce/productdetail?segment=res&language=DE&productId=11068203&payOption=ONETIME&srsltid=AfmBOoobLn49ivv85Qu_YWCmpMbNQogUBLkYeGiLtKdPyq3yN6vdLL7wagw",
+        "details_and_offers": [
+          {
+            "text": "Free delivery"
+          },
+          {
+            "text": "14-day returns",
+            "link": "https://www.google.com/url?q=https://www.google.com/shopping/ratings/account/metrics%3Fq%3Dswisscom.ch%26c%3DCH%26v%3D19%26hl%3Den&opi=95576897&sa=U&ved=0ahUKEwj0rK3549OPAxXHRzABHc2RL0QQlZ4BCB8&usg=AOvVaw3y9DYDtw9yg75CTCAgh63_"
+          }
+        ],
+        "base_price": "CHF 899.00",
+        "additional_price": {
+          "shipping": "CHF 0.00"
+        },
+        "installments": "36",
+        "installments_detail": "min. 36 x CHF 100 / month",
+        "total_price": "CHF 899.00",
+        "offer_id": "10924578",
+        "offer_link": "https://www.google.com/shopping/product/15219730193521423332/plusbox/10924578?gl=ch&ie=UTF-8&sourceid=chrome&hl=en&prds=cid:15219730193521423332,cs:1,eto:4241226274795269247_0,pid:8331618653158380121,rsk:PC_5947667959674427990",
+        "serpapi_offer_link": "https://serpapi.com/search.json?engine=google_product&filter=condition%3A0&gl=ch&google_domain=google.com&hl=en&offer_id=10924578&product_id=15219730193521423332"
+      }
+    ]
+  }
+}
