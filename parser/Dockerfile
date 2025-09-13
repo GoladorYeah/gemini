@@ -42,8 +42,6 @@ COPY . .
 
 RUN go build -o /parser-server
 
-# Устанавливаем Playwright драйверы без системных зависимостей (уже установлены выше)
-RUN go run github.com/playwright-community/playwright-go/cmd/playwright@latest install chromium
 
 # Устанавливаем переменную окружения для Playwright
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright

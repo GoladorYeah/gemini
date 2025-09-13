@@ -19,8 +19,9 @@ import (
 	"gemini/backend/internal/search"
 	"gemini/backend/internal/serpapi"
 	"gemini/backend/internal/storage"
-	"github.com/meilisearch/meilisearch-go"
+
 	_ "github.com/lib/pq"
+	"github.com/meilisearch/meilisearch-go"
 )
 
 var (
@@ -59,18 +60,21 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 
 	normalizedResp, err := normalizer.Normalize(req)
 	if err != nil {
+		log.Printf("Error normalizing query: %v", err)
 		http.Error(w, "Error normalizing query: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	log.Printf("Normalized response: %+v\n", normalizedResp)
 
+	// Log search query (don't fail the request if logging fails)
 	if err := storage.LogSearchQuery(db, req.Query, normalizedResp.Title, normalizedResp.Category); err != nil {
 		log.Printf("Error logging search query: %v", err)
 	}
 
 	searchResults, err := search.Search(meiliClient, *normalizedResp)
 	if err != nil {
+		log.Printf("Error searching: %v", err)
 		http.Error(w, "Error searching: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -202,7 +206,7 @@ func apiKeysHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		json.NewEncoder(w).Encode(map[string]string{
-			"gemini_api_keys": maskedGeminiKeys,
+			"gemini_api_keys":  maskedGeminiKeys,
 			"serpapi_api_keys": maskedSerpApiKeys,
 		})
 	} else if r.Method == http.MethodPost {
@@ -237,7 +241,7 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-	
+
 	if err := cmd.Run(); err != nil {
 		http.Error(w, fmt.Sprintf("Error getting logs for %s: %v\n%s", service, err, out.String()), http.StatusInternalServerError)
 		return
@@ -252,6 +256,7 @@ func productsAdminHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		products, err := storage.GetAllProducts(db)
 		if err != nil {
+			log.Printf("Error getting products from database: %v", err)
 			http.Error(w, "Error getting products from database", http.StatusInternalServerError)
 			return
 		}
@@ -265,11 +270,13 @@ func productsAdminHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := storage.AddProduct(db, product); err != nil {
+			log.Printf("Error adding product to database: %v", err)
 			http.Error(w, "Error adding product to database", http.StatusInternalServerError)
 			return
 		}
 
 		if _, err := search.AddProduct(meiliClient, product); err != nil {
+			log.Printf("Error adding product to Meilisearch: %v", err)
 			http.Error(w, "Error adding product to Meilisearch", http.StatusInternalServerError)
 			return
 		}
@@ -283,11 +290,13 @@ func productsAdminHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := storage.UpdateProduct(db, product); err != nil {
+			log.Printf("Error updating product in database: %v", err)
 			http.Error(w, "Error updating product in database", http.StatusInternalServerError)
 			return
 		}
 
 		if _, err := search.UpdateProduct(meiliClient, product); err != nil {
+			log.Printf("Error updating product in Meilisearch: %v", err)
 			http.Error(w, "Error updating product in Meilisearch", http.StatusInternalServerError)
 			return
 		}
@@ -296,11 +305,13 @@ func productsAdminHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		productID := strings.TrimPrefix(r.URL.Path, "/api/admin/products/")
 		if err := storage.DeleteProduct(db, productID); err != nil {
+			log.Printf("Error deleting product from database: %v", err)
 			http.Error(w, "Error deleting product from database", http.StatusInternalServerError)
 			return
 		}
 
 		if _, err := search.DeleteProduct(meiliClient, productID); err != nil {
+			log.Printf("Error deleting product from Meilisearch: %v", err)
 			http.Error(w, "Error deleting product from Meilisearch", http.StatusInternalServerError)
 			return
 		}
@@ -314,6 +325,7 @@ func productsAdminHandler(w http.ResponseWriter, r *http.Request) {
 func statisticsHandler(w http.ResponseWriter, r *http.Request) {
 	stats, err := storage.GetSearchStatistics(db)
 	if err != nil {
+		log.Printf("Error getting statistics from database: %v", err)
 		http.Error(w, "Error getting statistics from database", http.StatusInternalServerError)
 		return
 	}
@@ -346,14 +358,15 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize Meilisearch client
+	// Initialize Meilisearch client (now includes configuration)
 	meiliClient = search.NewClient()
+
 	// Index some sample products
 	task := search.IndexSampleProducts(meiliClient)
 	if task != nil {
 		log.Printf("Waiting for indexing task %d to complete...", task.TaskUID)
 		taskManager := meiliClient.TaskManager()
-		_, err := taskManager.WaitForTask(task.TaskUID, time.Second*5)
+		_, err := taskManager.WaitForTask(task.TaskUID, time.Second*10) // Increased timeout
 		if err != nil {
 			log.Printf("Error waiting for task: %v", err)
 		}

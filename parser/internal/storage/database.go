@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"pricerunner-parser/internal/config"
 	"pricerunner-parser/internal/models"
@@ -54,7 +53,7 @@ func (d *DatabaseStorage) createTables() error {
 			price_eur DECIMAL(10,2),
 			offer_count VARCHAR(10),
 			features JSONB,
-			categories TEXT[],
+			category TEXT,
 			additional_images JSONB,
 			google_product_id TEXT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -91,7 +90,7 @@ func (d *DatabaseStorage) SaveProducts(products []models.Product, pageNumber int
 	query := `
 		INSERT INTO products (id, title, url, image_url, image_local, 
 			price_gbp, price_eur, offer_count, 
-			features, categories, additional_images, google_product_id,
+			features, category, additional_images, google_product_id,
 			created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		ON CONFLICT (id) DO UPDATE SET
@@ -103,7 +102,7 @@ func (d *DatabaseStorage) SaveProducts(products []models.Product, pageNumber int
 			price_eur = EXCLUDED.price_eur,
 			offer_count = EXCLUDED.offer_count,
 			features = EXCLUDED.features,
-			categories = EXCLUDED.categories,
+			category = EXCLUDED.category,
 			additional_images = EXCLUDED.additional_images,
 			google_product_id = EXCLUDED.google_product_id,
 			updated_at = EXCLUDED.updated_at
@@ -118,15 +117,6 @@ func (d *DatabaseStorage) SaveProducts(products []models.Product, pageNumber int
 	for _, product := range products {
 		// Конвертируем сложные поля в JSON
 		featuresJSON, _ := json.Marshal(product.Features)
-
-		// Правильно формируем массив категорий для PostgreSQL
-		var categoriesArray interface{}
-		if len(product.Categories) > 0 {
-			categoriesArray = fmt.Sprintf("{%s}", strings.Join(product.Categories, ","))
-		} else {
-			categoriesArray = "{}"
-		}
-
 		additionalImagesJSON, _ := json.Marshal(product.ExtraImages)
 
 		var priceGBP string
@@ -151,7 +141,7 @@ func (d *DatabaseStorage) SaveProducts(products []models.Product, pageNumber int
 			priceEUR,
 			offerCount,
 			featuresJSON,
-			categoriesArray,
+			product.Category,
 			additionalImagesJSON,
 			"", // google_product_id пока пустой
 			product.CreatedAt,

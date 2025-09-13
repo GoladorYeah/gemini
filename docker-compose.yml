@@ -46,7 +46,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/internal/storage/init.sql:/docker-entrypoint-initdb.d/10-init.sql
-      - ./backend/internal/storage/search_logs.sql:/docker-entrypoint-initdb.d/20-search-logs.sql
 
   redis:
     image: redis:7

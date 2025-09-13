@@ -11,7 +11,7 @@ type Product struct {
 	ImageLocal  string            `json:"image_local,omitempty" db:"image_local"`
 	Price       *PriceInfo        `json:"price_info,omitempty" db:"-"`
 	Features    map[string]string `json:"features,omitempty" db:"-"`
-	Categories  []string          `json:"categories,omitempty" db:"-"`
+	Category    string            `json:"category,omitempty" db:"category"`
 	ExtraImages []ImageInfo       `json:"additional_images,omitempty" db:"-"`
 	CreatedAt   time.Time         `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at" db:"updated_at"`

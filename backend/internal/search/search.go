@@ -14,7 +14,51 @@ import (
 // NewClient creates and returns a new Meilisearch client.
 func NewClient() meilisearch.ServiceManager {
 	client := meilisearch.New("http://meilisearch:7700")
+
+	// Configure MeiliSearch settings
+	err := configureMeiliSearch(client)
+	if err != nil {
+		log.Printf("Error configuring MeiliSearch: %v", err)
+	}
+
 	return client
+}
+
+// configureMeiliSearch sets up the filterable and searchable attributes
+func configureMeiliSearch(client meilisearch.ServiceManager) error {
+	// Get or create the products index
+	index := client.Index("products")
+
+	// Configure filterable attributes
+	filterableAttributes := []string{"category", "features"}
+	filterableAttrsInterface := make([]interface{}, len(filterableAttributes))
+	for i, v := range filterableAttributes {
+		filterableAttrsInterface[i] = v
+	}
+	_, err := index.UpdateFilterableAttributes(&filterableAttrsInterface)
+	if err != nil {
+		log.Printf("Error setting filterable attributes: %v", err)
+		return err
+	}
+
+	// Configure searchable attributes
+	searchableAttributes := []string{"title", "category", "features"}
+	_, err = index.UpdateSearchableAttributes(&searchableAttributes)
+	if err != nil {
+		log.Printf("Error setting searchable attributes: %v", err)
+		return err
+	}
+
+	// Configure sortable attributes (optional)
+	sortableAttributes := []string{"title", "category"}
+	_, err = index.UpdateSortableAttributes(&sortableAttributes)
+	if err != nil {
+		log.Printf("Error setting sortable attributes: %v", err)
+		return err
+	}
+
+	log.Println("MeiliSearch configuration updated successfully")
+	return nil
 }
 
 // IndexSampleProducts adds some sample products to the Meilisearch index.
@@ -53,35 +97,57 @@ func IndexSampleProducts(client meilisearch.ServiceManager) *meilisearch.TaskInf
 	return task
 }
 
-// Search performs a search on the products index.
+// buildMeiliSearchFilter creates a proper filter string for MeiliSearch
+func buildMeiliSearchFilter(query models.NormalizedResponse) string {
+	var filters []string
+
+	// Add category filter if not empty
+	if query.Category != "" {
+		filters = append(filters, fmt.Sprintf("category = '%s'", query.Category))
+	}
+
+	// Add features filters - use OR instead of AND for better results
+	if len(query.Features) > 0 {
+		var featureFilters []string
+		for _, feature := range query.Features {
+			if feature != "" {
+				featureFilters = append(featureFilters, fmt.Sprintf("features = '%s'", feature))
+			}
+		}
+		if len(featureFilters) > 0 {
+			featuresFilter := strings.Join(featureFilters, " OR ")
+			if len(featureFilters) > 1 {
+				featuresFilter = "(" + featuresFilter + ")"
+			}
+			filters = append(filters, featuresFilter)
+		}
+	}
+
+	return strings.Join(filters, " AND ")
+}
+
+// Search performs a search on the products index with improved error handling.
 func Search(client meilisearch.ServiceManager, query models.NormalizedResponse) (*meilisearch.SearchResponse, error) {
 	index := client.Index("products")
 
-	var filter string
-	if query.Category != "" {
-		filter = fmt.Sprintf("category = '%s'", query.Category)
-	}
+	// Build MeiliSearch filter
+	filter := buildMeiliSearchFilter(query)
 
-	if len(query.Features) > 0 {
-		var featuresFilter []string
-		for _, feature := range query.Features {
-			featuresFilter = append(featuresFilter, fmt.Sprintf("features = '%s'", feature))
-		}
-		if filter != "" {
-			filter = fmt.Sprintf("%s AND (%s)", filter, strings.Join(featuresFilter, " AND "))
-		} else {
-			filter = strings.Join(featuresFilter, " AND ")
-		}
-	}
-
-	searchRes, err := index.Search(query.Title, &meilisearch.SearchRequest{
-		Limit:  10,
+	searchReq := &meilisearch.SearchRequest{
 		Filter: filter,
-	})
+		Limit:  10,
+	}
 
+	searchRes, err := index.Search(query.Title, searchReq)
 	if err != nil {
-		log.Printf("Error searching: %v", err)
-		return nil, err
+		log.Printf("Error searching with filter '%s': %v", filter, err)
+		// Fallback to simple text search without filters
+		searchRes, err = index.Search(query.Title, &meilisearch.SearchRequest{Limit: 10})
+		if err != nil {
+			log.Printf("Fallback search also failed: %v", err)
+			return nil, fmt.Errorf("search failed: %v", err)
+		}
+		log.Printf("Fallback search succeeded, returned %d results", len(searchRes.Hits))
 	}
 
 	return searchRes, nil
