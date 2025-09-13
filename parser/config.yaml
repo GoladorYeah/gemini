@@ -47,18 +47,18 @@ parser:
 currency:
   gbp_to_eur: 1.15
 
-# Настройки хранения
+# Настройки хранения - ИСПРАВЛЕНО: используем database вместо json
 storage:
-  type: "json"
+  type: "database"
   output_dir: "./output"
   images_dir: "./images"
   
   database:
-    host: "localhost"
+    host: "postgres"
     port: 5432
-    user: "parser"
+    user: "user"
     password: "password"
-    database: "pricerunner"
+    database: "geminidb"
     
 # Настройки логирования
 logging:
